@@ -8,6 +8,9 @@ import { NODOS } from '../config/nodos.js';
 import blockchainRoutes from '../modules/blockchain/blockchain.routes.js';
 import ubicacionesRoutes from '../modules/ubicaciones/ubicaciones.routes.js';
 import authRoutes from '../modules/auth/auth.routes.js';
+import donantesRoutes from '../modules/donantes/donantes.routes.js';
+import solicitudesRoutes from '../modules/solicitudes/solicitudes.routes.js';
+import hospitalesRoutes from '../modules/hospitales/hospitales.routes.js';
 
 
 const app = express();
@@ -38,7 +41,9 @@ app.get('/api/health', (req, res) => {
 app.use('/api/blockchain', blockchainRoutes);
 app.use('/api/ubicaciones', ubicacionesRoutes);
 app.use('/api/auth', authRoutes);
-
+app.use('/api/donantes', donantesRoutes);
+app.use('/api/solicitudes', solicitudesRoutes);
+app.use('/api/hospitales', hospitalesRoutes);
 
 app.listen(NODO.puerto, () => {
   console.log(`${NODO.nombre} en http://localhost:${NODO.puerto}`);

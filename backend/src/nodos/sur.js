@@ -6,6 +6,9 @@ import morgan from 'morgan';
 import { getDb } from '../config/database.js';
 import { NODOS } from '../config/nodos.js';
 import blockchainRoutes from '../modules/blockchain/blockchain.routes.js';
+import ubicacionesRoutes from '../modules/ubicaciones/ubicaciones.routes.js';
+import authRoutes from '../modules/auth/auth.routes.js';
+
 
 const app = express();
 const NODO = NODOS.sur;
@@ -33,6 +36,9 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use('/api/blockchain', blockchainRoutes);
+app.use('/api/ubicaciones', ubicacionesRoutes);
+app.use('/api/auth', authRoutes);
+
 
 app.listen(NODO.puerto, () => {
   console.log(`${NODO.nombre} en http://localhost:${NODO.puerto}`);

@@ -12,7 +12,7 @@ export async function propagarBloque(bloque, nodoOrigen) {
   );
 
   const exitosos = resultados.filter(r => r.status === 'fulfilled').length;
-  console.log(`📡 Propagación desde ${nodoOrigen}: ${exitosos}/${destinos.length}`);
+  console.log(`Propagación desde ${nodoOrigen}: ${exitosos}/${destinos.length}`);
 
   return { exitosos, total: destinos.length };
 }

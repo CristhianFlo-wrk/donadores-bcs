@@ -1,0 +1,7 @@
+{
+  "name": "donadores-bcs",
+  "version": "1.0.0",
+  "description": "Sistema digital para la gestión y coordinación de donadores de sangre en Baja California Sur",
+  "private": true,
+  "author": "Equipo 7 - UABCS"
+}

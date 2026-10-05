@@ -1,0 +1,28 @@
+{
+  "name": "donadores-bcs-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "init-db": "node database/initDB.js",
+    "dev:central": "nodemon src/index.js",
+    "dev:norte": "nodemon src/nodos/norte.js",
+    "dev:centro": "nodemon src/nodos/centro.js",
+    "dev:sur": "nodemon src/nodos/sur.js",
+    "dev": "concurrently \"npm:dev:central\" \"npm:dev:norte\" \"npm:dev:centro\" \"npm:dev:sur\""
+  },
+  "dependencies": {
+    "axios": "^1.20.0",
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "^13.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.4",
+    "express": "^5.2.1",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.12.1"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "nodemon": "^3.1.14"
+  }
+}

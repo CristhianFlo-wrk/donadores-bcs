@@ -11,6 +11,7 @@ import authRoutes from '../modules/auth/auth.routes.js';
 import donantesRoutes from '../modules/donantes/donantes.routes.js';
 import solicitudesRoutes from '../modules/solicitudes/solicitudes.routes.js';
 import hospitalesRoutes from '../modules/hospitales/hospitales.routes.js';
+import notificacionesRoutes from '../modules/notificaciones/notificaciones.routes.js';
 
 
 const app = express();
@@ -44,6 +45,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/donantes', donantesRoutes);
 app.use('/api/solicitudes', solicitudesRoutes);
 app.use('/api/hospitales', hospitalesRoutes);
+app.use('/api/notificaciones', notificacionesRoutes);
 
 
 app.listen(NODO.puerto, () => {

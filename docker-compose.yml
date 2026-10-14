@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: donadores-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: donadores
+      POSTGRES_PASSWORD: donadores123
+      POSTGRES_DB: donadores_bcs
+    ports:
+      - "5432:5432"
+    volumes:
+      - donadores_pgdata:/var/lib/postgresql/data
+
+volumes:
+  donadores_pgdata:
+    name: donadores_pgdata

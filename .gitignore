@@ -1,0 +1,45 @@
+# Dependencias
+node_modules/
+package-lock.json
+
+# Variables de entorno 
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# Bases de datos SQLite obsoletas 
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+backend/database/*.db
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build
+dist/
+build/
+coverage/
+
+# Render / Vercel
+.vercel
+.render
+
+# Temporales
+*.tmp
+*.bak

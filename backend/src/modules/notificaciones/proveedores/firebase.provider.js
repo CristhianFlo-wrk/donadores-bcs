@@ -14,10 +14,10 @@ export async function inicializarFirebase() {
     firebaseApp = admin.default.initializeApp({
       projectId: process.env.FIREBASE_PROJECT_ID
     });
-    console.log('[FIREBASE] Inicializado correctamente');
+    console.log('[NOTIFICACIONES] Firebase inicializado');
     return firebaseApp;
   } catch (error) {
-    console.log('[FIREBASE] No se pudo inicializar:', error.message);
+    console.error('[WARN] Firebase no se pudo inicializar: ' + error.message);
     return null;
   }
 }

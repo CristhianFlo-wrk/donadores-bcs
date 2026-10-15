@@ -2,14 +2,19 @@ import { Router } from 'express';
 import {
   postNotificar,
   patchResponder,
-  getMisNotificaciones
+  getMisNotificaciones,
+  patchDonacion
 } from './notificaciones.controller.js';
-import { verificarToken } from '../../middleware/auth.js';
+import { verificarToken, soloRol } from '../../middleware/auth.js';
 
 const router = Router();
 
-router.post('/notificar', verificarToken, postNotificar);
-router.patch('/:id/responder', verificarToken, patchResponder);
-router.get('/mis-notificaciones', verificarToken, getMisNotificaciones);
+// Hospital dueno de la solicitud o admin (el dueno se valida en el service)
+router.post('/notificar', verificarToken, soloRol('hospital', 'admin'), postNotificar);
+router.patch('/:id/donacion', verificarToken, soloRol('hospital', 'admin'), patchDonacion);
+
+// Donante
+router.get('/mis-notificaciones', verificarToken, soloRol('donante'), getMisNotificaciones);
+router.patch('/:id/responder', verificarToken, soloRol('donante'), patchResponder);
 
 export default router;

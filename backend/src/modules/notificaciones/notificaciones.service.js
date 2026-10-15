@@ -1,135 +1,220 @@
-import { buscarCompatibles } from '../donantes/donantes.service.js';
+import { query, transaccion } from '../../config/database.js';
+import { errorValidacion, errorNoEncontrado, ErrorHttp } from '../../utils/errores.js';
+import { buscarCompatibles, DIAS_ENTRE_DONACIONES } from '../donantes/donantes.service.js';
+import { obtenerSolicitudBase, verificarAccesoHospital } from '../solicitudes/solicitudes.service.js';
+import { registrarEntrada, registrarLog } from '../auditoria/auditoria.service.js';
 import { enviarPushSimulado } from './proveedores/console.provider.js';
+import { enviarPushReal } from './proveedores/firebase.provider.js';
 
-export async function notificarSolicitud(db, idSolicitud, opciones = {}) {
-  const solicitud = db.prepare(`
-    SELECT s.id, s.id_hospital, s.id_tipo_sangre, s.urgencia, s.estado,
-           h.nombre as hospital_nombre, h.id_nodo as hospital_nodo,
-           ts.codigo as tipo_sangre
-    FROM solicitudes s
-    JOIN hospitales h ON s.id_hospital = h.id
-    JOIN tipos_sangre ts ON s.id_tipo_sangre = ts.id
-    WHERE s.id = ?
-  `).get(idSolicitud);
+const RESPUESTAS = ['confirmada', 'rechazada'];
 
-  if (!solicitud) {
-    throw new Error('Solicitud no encontrada');
+async function enviarPush(donante, titulo, mensaje) {
+  if (process.env.FIREBASE_PROJECT_ID && donante.fcm_token) {
+    const envio = await enviarPushReal(donante.fcm_token, titulo, mensaje);
+    if (envio.ok) return envio;
+    console.error('[WARN] Push real fallo para donante ' + donante.id_donante + ', se usa simulado: ' + envio.error);
   }
+  return enviarPushSimulado('donante_' + donante.id_donante, mensaje);
+}
+
+// Notifica a los donantes compatibles y aptos por defecto solo los de la region del hospital
+export async function notificarSolicitud(usuario, idSolicitud, opciones = {}, contexto = {}) {
+  const solicitud = await obtenerSolicitudBase(idSolicitud);
+  verificarAccesoHospital(usuario, solicitud.id_hospital);
 
   if (solicitud.estado !== 'activa') {
-    throw new Error('La solicitud no está activa');
+    throw errorValidacion('La solicitud no esta activa');
   }
 
-  const filtrosBusqueda = {
-    idNodo: opciones.idNodo || solicitud.hospital_nodo,
+  const candidatos = await buscarCompatibles(solicitud.id_tipo_sangre, {
+    region: opciones.todasLasRegiones ? null : (opciones.region || solicitud.hospital_region),
     soloDisponibles: true,
+    soloAptos: true,
     limite: opciones.limite || 20
-  };
-
-  const candidatos = buscarCompatibles(db, solicitud.id_tipo_sangre, filtrosBusqueda);
+  });
 
   if (candidatos.length === 0) {
-    return {
-      solicitud_id: idSolicitud,
-      total_candidatos: 0,
-      notificaciones_enviadas: 0,
-      mensaje: 'No hay donantes compatibles disponibles'
-    };
+    return { id_solicitud: idSolicitud, total_candidatos: 0, notificaciones_enviadas: 0, notificaciones: [] };
   }
 
-  const urgenciaTexto = solicitud.urgencia === 'critica' ? 'URGENTE' : 'URGENTE';
-  const mensaje = `[${urgenciaTexto}] Se requiere sangre ${solicitud.tipo_sangre} en ${solicitud.hospital_nombre}. Confirma tu asistencia en la app.`;
-
-  const notificacionesEnviadas = [];
-
-  for (const candidato of candidatos) {
-    const yaNotificado = db.prepare(`
-      SELECT id FROM notificaciones
-      WHERE id_solicitud = ? AND id_donante = ?
-    `).get(idSolicitud, candidato.id);
-
-    if (yaNotificado) continue;
-
-    const result = db.prepare(`
+  //un donante ya notificado para esta solicitud no se vuelve a notificar
+  const nuevas = await transaccion(async (client) => {
+    const { rows } = await client.query(`
       INSERT INTO notificaciones (id_solicitud, id_donante, canal, estado)
-      VALUES (?, ?, 'push', 'enviada')
-    `).run(idSolicitud, candidato.id);
+      SELECT $1, id_donante, 'push', 'enviada' FROM UNNEST($2::int[]) AS id_donante
+      ON CONFLICT (id_solicitud, id_donante) DO NOTHING
+      RETURNING id, id_donante
+    `, [idSolicitud, candidatos.map((c) => c.id_donante)]);
 
-    const envio = await enviarPushSimulado(
-      `donante_${candidato.id}`,
-      mensaje
-    );
-
-    notificacionesEnviadas.push({
-      id: result.lastInsertRowid,
-      id_donante: candidato.id,
-      canal: 'push',
-      estado: 'enviada',
-      modo: envio.modo
+    await registrarLog(client, {
+      idUsuario: contexto.idUsuario,
+      accion: 'NOTIFICACIONES_ENVIADAS',
+      detalles: { id_solicitud: idSolicitud, total: rows.length },
+      ipOrigen: contexto.ip
     });
+
+    return rows;
+  });
+
+  if (nuevas.length === 0) {
+    return { id_solicitud: idSolicitud, total_candidatos: candidatos.length, notificaciones_enviadas: 0, notificaciones: [] };
   }
+
+  const { rows: tokens } = await query(
+    'SELECT id AS id_donante, fcm_token FROM donantes WHERE id = ANY($1::int[])',
+    [nuevas.map((n) => n.id_donante)]
+  );
+
+  const etiqueta = solicitud.urgencia === 'critica' ? 'CRITICA' : 'URGENTE';
+  const titulo = `[${etiqueta}] Se necesita sangre ${solicitud.tipo_sangre}`;
+  const mensaje = `${titulo} en ${solicitud.hospital_nombre}. Confirma tu asistencia en la app.`;
+
+  const notificaciones = [];
+  for (const nueva of nuevas) {
+    const donante = tokens.find((t) => t.id_donante === nueva.id_donante);
+    const envio = await enviarPush(donante, titulo, mensaje);
+    notificaciones.push({ id: nueva.id, id_donante: nueva.id_donante, canal: 'push', estado: 'enviada', modo: envio.modo });
+  }
+
+  console.log('[NOTIFICACIONES] Solicitud id=' + idSolicitud + ': ' + notificaciones.length + ' notificaciones enviadas');
 
   return {
-    solicitud_id: idSolicitud,
+    id_solicitud: idSolicitud,
     total_candidatos: candidatos.length,
-    notificaciones_enviadas: notificacionesEnviadas.length,
-    notificaciones: notificacionesEnviadas
+    notificaciones_enviadas: notificaciones.length,
+    notificaciones
   };
 }
 
-export function responderNotificacion(db, idNotificacion, respuesta) {
-  if (!['confirmada', 'rechazada'].includes(respuesta)) {
-    throw new Error('Respuesta debe ser "confirmada" o "rechazada"');
+// El donante solo puede responder sus propias notificaciones de solicitudes activas
+export async function responderNotificacion(idUsuario, idNotificacion, respuesta) {
+  if (!RESPUESTAS.includes(respuesta)) {
+    throw errorValidacion('respuesta debe ser "confirmada" o "rechazada"');
   }
 
-  const notificacion = db.prepare(`
-    SELECT n.*, d.curp_hash
+  const { rows } = await query(`
+    SELECT n.id, n.estado, n.id_solicitud, s.estado AS solicitud_estado, d.id_usuario
     FROM notificaciones n
     JOIN donantes d ON n.id_donante = d.id
-    WHERE n.id = ?
-  `).get(idNotificacion);
+    JOIN solicitudes s ON n.id_solicitud = s.id
+    WHERE n.id = $1
+  `, [idNotificacion]);
 
-  if (!notificacion) {
-    throw new Error('Notificación no encontrada');
+  const notificacion = rows[0];
+  // 404 tambien si es de otro donante, para no revelar que existe
+  if (!notificacion || notificacion.id_usuario !== idUsuario) {
+    throw errorNoEncontrado('Notificacion no encontrada');
   }
 
-  if (notificacion.estado !== 'enviada') {
-    throw new Error(`La notificación ya está ${notificacion.estado}`);
+  if (notificacion.solicitud_estado !== 'activa') {
+    throw errorValidacion('La solicitud ya no esta activa');
   }
 
-  db.prepare(`
+  // Se permite cambiar de confirmada a rechazada y viceversa mientras no haya donado
+  const { rowCount } = await query(`
     UPDATE notificaciones
-    SET estado = ?, fecha_respuesta = ?
-    WHERE id = ?
-  `).run(respuesta, new Date().toISOString(), idNotificacion);
+    SET estado = $1, fecha_respuesta = NOW()
+    WHERE id = $2 AND estado IN ('enviada', 'confirmada', 'rechazada')
+  `, [respuesta, idNotificacion]);
 
-  return {
-    id: idNotificacion,
-    estado: respuesta,
-    solicitud_id: notificacion.id_solicitud
-  };
+  if (rowCount === 0) {
+    throw errorValidacion('La notificacion ya esta ' + notificacion.estado);
+  }
+
+  return { id: idNotificacion, estado: respuesta, id_solicitud: notificacion.id_solicitud };
 }
 
-export function listarNotificacionesDonante(db, idUsuario) {
-  const donante = db.prepare(
-    'SELECT id FROM donantes WHERE id_usuario = ?'
-  ).get(idUsuario);
-
-  if (!donante) throw new Error('Donante no encontrado');
-
-  const notificaciones = db.prepare(`
+export async function listarNotificacionesDonante(idUsuario) {
+  const { rows } = await query(`
     SELECT n.id, n.id_solicitud, n.canal, n.estado,
            n.fecha_envio, n.fecha_respuesta,
-           s.urgencia, s.estado as solicitud_estado,
-           h.nombre as hospital_nombre,
-           ts.codigo as tipo_sangre
+           s.urgencia, s.estado AS solicitud_estado,
+           h.nombre AS hospital_nombre, h.direccion AS hospital_direccion,
+           ts.codigo AS tipo_sangre
     FROM notificaciones n
+    JOIN donantes d ON n.id_donante = d.id
     JOIN solicitudes s ON n.id_solicitud = s.id
     JOIN hospitales h ON s.id_hospital = h.id
     JOIN tipos_sangre ts ON s.id_tipo_sangre = ts.id
-    WHERE n.id_donante = ?
+    WHERE d.id_usuario = $1
     ORDER BY n.fecha_envio DESC
-  `).all(donante.id);
+  `, [idUsuario]);
+  return rows;
+}
 
-  return notificaciones;
+// El hospital marca que el donante asistio y dono: escribe en la cadena de historial_donaciones
+export async function registrarDonacion(usuario, idNotificacion, contexto = {}) {
+  return transaccion(async (client) => {
+    // FOR UPDATE: dos peticiones simultaneas no registran la misma donacion dos veces
+    const { rows } = await client.query(`
+      SELECT n.id, n.estado, n.id_solicitud, n.id_donante,
+             s.id_hospital, s.estado AS solicitud_estado, h.region AS hospital_region,
+             d.curp_hash, ts.codigo AS tipo_sangre,
+             FLOOR(EXTRACT(EPOCH FROM (NOW() - d.ultima_donacion)) / 86400)::int AS dias_desde_ultima
+      FROM notificaciones n
+      JOIN solicitudes s ON n.id_solicitud = s.id
+      JOIN hospitales h ON s.id_hospital = h.id
+      JOIN donantes d ON n.id_donante = d.id
+      JOIN tipos_sangre ts ON d.id_tipo_sangre = ts.id
+      WHERE n.id = $1
+      FOR UPDATE OF n, d
+    `, [idNotificacion]);
+
+    const notificacion = rows[0];
+    if (!notificacion) {
+      throw errorNoEncontrado('Notificacion no encontrada');
+    }
+
+    verificarAccesoHospital(usuario, notificacion.id_hospital);
+
+    if (notificacion.estado === 'donada') {
+      throw errorValidacion('La donacion ya fue registrada');
+    }
+    if (notificacion.estado !== 'confirmada') {
+      throw errorValidacion('Solo se registra la donacion de un donante que confirmo asistencia');
+    }
+    if (notificacion.solicitud_estado !== 'activa') {
+      throw errorValidacion('La solicitud ya no esta activa');
+    }
+
+    const dias = notificacion.dias_desde_ultima;
+    if (dias !== null && dias < DIAS_ENTRE_DONACIONES) {
+      throw new ErrorHttp(409, `El donante dono hace ${dias} dias; minimo ${DIAS_ENTRE_DONACIONES}`);
+    }
+
+    const entrada = await registrarEntrada(client, {
+      idDonanteHash: notificacion.curp_hash,
+      grupoSanguineo: notificacion.tipo_sangre,
+      idHospital: notificacion.id_hospital,
+      region: notificacion.hospital_region
+    });
+
+    await client.query(
+      'UPDATE donantes SET ultima_donacion = $1, ha_donado_antes = TRUE WHERE id = $2',
+      [entrada.fecha_donacion, notificacion.id_donante]
+    );
+
+    await client.query("UPDATE notificaciones SET estado = 'donada' WHERE id = $1", [idNotificacion]);
+
+    await registrarLog(client, {
+      idUsuario: contexto.idUsuario,
+      accion: 'DONACION_REGISTRADA',
+      detalles: { id_notificacion: idNotificacion, id_solicitud: notificacion.id_solicitud, id_historial: entrada.id },
+      ipOrigen: contexto.ip
+    });
+
+    console.log('[NOTIFICACIONES] Donacion registrada para notificacion id=' + idNotificacion);
+
+    return {
+      id_notificacion: idNotificacion,
+      id_solicitud: notificacion.id_solicitud,
+      estado: 'donada',
+      historial: {
+        id: entrada.id,
+        fecha_donacion: entrada.fecha_donacion,
+        hash_anterior: entrada.hash_anterior,
+        hash_actual: entrada.hash_actual
+      }
+    };
+  });
 }

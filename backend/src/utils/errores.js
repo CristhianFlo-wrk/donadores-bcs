@@ -17,3 +17,13 @@ export function parsearId(valor, nombre = 'id') {
   }
   return numero;
 }
+
+// Limite de resultados para listados
+export function parsearLimite(valor, { defecto = 50, maximo = 100 } = {}) {
+  if (valor === undefined || valor === null || valor === '') return defecto;
+  const numero = Number(valor);
+  if (!Number.isInteger(numero) || numero <= 0) {
+    throw errorValidacion('limite debe ser un entero positivo');
+  }
+  return Math.min(numero, maximo);
+}

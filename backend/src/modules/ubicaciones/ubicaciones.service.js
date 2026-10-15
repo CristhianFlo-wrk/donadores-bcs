@@ -1,5 +1,34 @@
 import { query } from '../../config/database.js';
-import { errorNoEncontrado } from '../../utils/errores.js';
+import { errorNoEncontrado, errorValidacion } from '../../utils/errores.js';
+
+const NOMBRE_COLONIA_OTRA = 'Otra';
+
+// Valida la regla de colonias y devuelve la region derivada de colonia segun su municipio
+// colonia_personalizada solo se acepta cuando se elige la colonia "Otra" del municipio
+export async function resolverColonia(idColonia, coloniaPersonalizada, ejecutor = { query }) {
+  const texto = coloniaPersonalizada ? String(coloniaPersonalizada).trim() : null;
+
+  const { rows } = await ejecutor.query(`
+    SELECT c.id, c.nombre, m.region
+    FROM colonias c
+    JOIN municipios m ON c.id_municipio = m.id
+    WHERE c.id = $1 AND c.activo = TRUE
+  `, [idColonia]);
+
+  if (rows.length === 0) {
+    throw errorValidacion('Colonia no encontrada');
+  }
+
+  const esOtra = rows[0].nombre === NOMBRE_COLONIA_OTRA;
+  if (esOtra && !texto) {
+    throw errorValidacion('Si eliges la colonia "Otra" debes escribir colonia_personalizada');
+  }
+  if (!esOtra && texto) {
+    throw errorValidacion('colonia_personalizada solo aplica cuando eliges la colonia "Otra"');
+  }
+
+  return { idColonia: rows[0].id, coloniaPersonalizada: esOtra ? texto : null, region: rows[0].region };
+}
 
 export async function listarMunicipios() {
   const { rows } = await query(`

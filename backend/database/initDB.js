@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import pg from 'pg';
 
 const { Client } = pg;
@@ -11,11 +11,11 @@ const __dirname = path.dirname(__filename);
 const schemaPath = path.join(__dirname, 'schema.pg.sql');
 const seedsPath = path.join(__dirname, 'seeds.pg.sql');
 
-async function ejecutarArchivo(client, ruta, etiqueta) {
+async function ejecutarArchivo(client, ruta, etiqueta, silencioso) {
   const contenido = fs.readFileSync(ruta, 'utf8');
   try {
     await client.query(contenido);
-    console.log('[OK] ' + etiqueta + ' ejecutado correctamente');
+    if (!silencioso) console.log('[OK] ' + etiqueta + ' ejecutado correctamente');
   } catch (error) {
     console.error('[ERROR] Fallo en ' + etiqueta + ': ' + error.message);
     throw error;
@@ -29,30 +29,37 @@ async function resetearSecuencias(client) {
       `SELECT setval(pg_get_serial_sequence('${tabla}', 'id'), (SELECT MAX(id) FROM ${tabla}))`
     );
   }
-  console.log('[OK] Secuencias reseteadas');
 }
 
-async function initDB() {
-  const client = new Client({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-  });
+// Ejecuta schema + seeds sobre la base indicada. La usan el script y los tests
+export async function inicializarBaseDatos(connectionString, { silencioso = false } = {}) {
+  // schema.pg.sql hace DROP TABLE, nunca debe correr contra produccion
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('init-db bloqueado con NODE_ENV=production');
+  }
+
+  const client = new Client({ connectionString });
+  await client.connect();
 
   try {
-    await client.connect();
-    console.log('[DB] Conexion a PostgreSQL establecida');
-
-    await ejecutarArchivo(client, schemaPath, 'schema.pg.sql');
-    await ejecutarArchivo(client, seedsPath, 'seeds.pg.sql');
+    if (!silencioso) console.log('[DB] Conexion a PostgreSQL establecida');
+    await ejecutarArchivo(client, schemaPath, 'schema.pg.sql', silencioso);
+    await ejecutarArchivo(client, seedsPath, 'seeds.pg.sql', silencioso);
     await resetearSecuencias(client);
-
-    console.log('[OK] Base de datos inicializada');
-  } catch (error) {
-    console.error('[ERROR] ' + error.message);
-    process.exit(1);
+    if (!silencioso) console.log('[OK] Secuencias reseteadas');
   } finally {
     await client.end();
   }
 }
 
-initDB();
+const esEjecucionDirecta = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (esEjecucionDirecta) {
+  try {
+    await inicializarBaseDatos(process.env.DATABASE_URL);
+    console.log('[OK] Base de datos inicializada');
+  } catch (error) {
+    console.error('[ERROR] ' + error.message);
+    process.exit(1);
+  }
+}

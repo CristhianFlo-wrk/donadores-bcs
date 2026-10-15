@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "init-db": "node database/initDB.js"
+    "init-db": "node database/initDB.js",
+    "test": "node --import ./test/setup.js --test --test-concurrency=1 \"test/**/*.test.js\""
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -19,6 +20,7 @@
     "pg": "^8.13.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "supertest": "^7.3.1"
   }
 }

@@ -16,6 +16,22 @@ export async function query(text, params) {
   return pool.query(text, params);
 }
 
+// Ejecuta fn(client) dentro de BEGIN/COMMIT; si fn lanza error hace ROLLBACK
+export async function transaccion(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const resultado = await fn(client);
+    await client.query('COMMIT');
+    return resultado;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function probarConexion() {
   try {
     const result = await pool.query('SELECT NOW() AS ahora');

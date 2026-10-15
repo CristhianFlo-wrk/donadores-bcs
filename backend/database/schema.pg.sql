@@ -49,13 +49,27 @@ CREATE TABLE colonias (
     UNIQUE(id_municipio, nombre)
 );
 
+CREATE TABLE hospitales (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(200) NOT NULL,
+    institucion VARCHAR(20) CHECK (institucion IN ('IMSS', 'ISSSTE', 'SSBCS', 'otro')),
+    region VARCHAR(20) CHECK (region IN ('norte', 'centro', 'sur')),
+    direccion TEXT,
+    telefono VARCHAR(20),
+    latitud NUMERIC(9,6),
+    longitud NUMERIC(9,6),
+    activo BOOLEAN DEFAULT TRUE
+);
+
 CREATE TABLE usuarios (
     id SERIAL PRIMARY KEY,
     email VARCHAR(150) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     rol VARCHAR(20) CHECK (rol IN ('donante', 'hospital', 'admin')) NOT NULL,
+    id_hospital INTEGER REFERENCES hospitales(id),
     activo BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CHECK ((rol = 'hospital') = (id_hospital IS NOT NULL))
 );
 
 CREATE TABLE donantes (
@@ -76,19 +90,8 @@ CREATE TABLE donantes (
     peso_kg NUMERIC(5,2) CHECK (peso_kg >= 50),
     ha_donado_antes BOOLEAN DEFAULT FALSE,
     ultima_donacion TIMESTAMP,
+    fcm_token TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE hospitales (
-    id SERIAL PRIMARY KEY,
-    nombre VARCHAR(200) NOT NULL,
-    institucion VARCHAR(20) CHECK (institucion IN ('IMSS', 'ISSSTE', 'SSBCS', 'otro')),
-    region VARCHAR(20) CHECK (region IN ('norte', 'centro', 'sur')),
-    direccion TEXT,
-    telefono VARCHAR(20),
-    latitud NUMERIC(9,6),
-    longitud NUMERIC(9,6),
-    activo BOOLEAN DEFAULT TRUE
 );
 
 CREATE TABLE solicitudes (
@@ -109,7 +112,8 @@ CREATE TABLE notificaciones (
     canal VARCHAR(20) CHECK (canal IN ('push', 'sms')) NOT NULL,
     estado VARCHAR(20) CHECK (estado IN ('enviada', 'confirmada', 'rechazada')) DEFAULT 'enviada',
     fecha_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    fecha_respuesta TIMESTAMP
+    fecha_respuesta TIMESTAMP,
+    UNIQUE (id_solicitud, id_donante)
 );
 
 CREATE TABLE historial_donaciones (

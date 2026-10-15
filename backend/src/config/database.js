@@ -1,25 +1,34 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import 'dotenv/config';
+import pg from 'pg';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const { Pool } = pg;
 
-const conexiones = {};
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
 
-export function getDb(nodoId) {
-  if (conexiones[nodoId]) return conexiones[nodoId];
+pool.on('error', (error) => {
+  console.error('[ERROR] Pool de PostgreSQL: ' + error.message);
+});
 
-  const dbPath = path.join(__dirname, `../../database/${nodoId}.db`);
-  const db = new Database(dbPath);
-
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-
-  conexiones[nodoId] = db;
-  return db;
+export async function query(text, params) {
+  return pool.query(text, params);
 }
 
-export function cerrarTodas() {
-  Object.values(conexiones).forEach(db => db.close());
+export async function probarConexion() {
+  try {
+    const result = await pool.query('SELECT NOW() AS ahora');
+    console.log('[DB] Conexion a PostgreSQL establecida: ' + result.rows[0].ahora.toISOString());
+    return true;
+  } catch (error) {
+    console.error('[ERROR] No se pudo conectar a PostgreSQL: ' + error.message);
+    return false;
+  }
 }
+
+export async function cerrarPool() {
+  await pool.end();
+}
+
+export default pool;

@@ -1,37 +1,58 @@
-import Database from 'better-sqlite3';
+import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import pg from 'pg';
 
+const { Client } = pg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const NODOS = ['norte', 'centro', 'sur'];
-const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-const seeds = fs.readFileSync(path.join(__dirname, 'seeds.sql'), 'utf8');
+const schemaPath = path.join(__dirname, 'schema.pg.sql');
+const seedsPath = path.join(__dirname, 'seeds.pg.sql');
 
-console.log('Inicializando las 3 bases de datos...\n');
-
-for (const nodo of NODOS) {
-  const dbPath = path.join(__dirname, `${nodo}.db`);
-
-  if (fs.existsSync(dbPath)) {
-    fs.unlinkSync(dbPath);
-    console.log(`BD anterior de ${nodo} eliminada`);
+async function ejecutarArchivo(client, ruta, etiqueta) {
+  const contenido = fs.readFileSync(ruta, 'utf8');
+  try {
+    await client.query(contenido);
+    console.log('[OK] ' + etiqueta + ' ejecutado correctamente');
+  } catch (error) {
+    console.error('[ERROR] Fallo en ' + etiqueta + ': ' + error.message);
+    throw error;
   }
-
-  const db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-
-  db.exec(schema);
-  console.log(`Esquema creado en ${nodo}.db`);
-
-  db.exec(seeds);
-  console.log(`Datos semilla insertados en ${nodo}.db`);
-
-  db.close();
-  console.log(`Nodo ${nodo.toUpperCase()} listo\n`);
 }
 
-console.log('Los 3 nodos están listos');
+async function resetearSecuencias(client) {
+  const tablas = ['tipos_sangre', 'municipios', 'hospitales'];
+  for (const tabla of tablas) {
+    await client.query(
+      `SELECT setval(pg_get_serial_sequence('${tabla}', 'id'), (SELECT MAX(id) FROM ${tabla}))`
+    );
+  }
+  console.log('[OK] Secuencias reseteadas');
+}
+
+async function initDB() {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  });
+
+  try {
+    await client.connect();
+    console.log('[DB] Conexion a PostgreSQL establecida');
+
+    await ejecutarArchivo(client, schemaPath, 'schema.pg.sql');
+    await ejecutarArchivo(client, seedsPath, 'seeds.pg.sql');
+    await resetearSecuencias(client);
+
+    console.log('[OK] Base de datos inicializada');
+  } catch (error) {
+    console.error('[ERROR] ' + error.message);
+    process.exit(1);
+  } finally {
+    await client.end();
+  }
+}
+
+initDB();

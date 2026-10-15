@@ -77,6 +77,7 @@ describe('POST /api/auth/registro', () => {
       [{ fecha_nacimiento: '20-05-1995' }, /fecha_nacimiento invalida/],
       [{ sexo: 'X' }, /sexo/],
       [{ peso_kg: 45 }, /50 kg/],
+      [{ latitud: 99999 }, /latitud/],
       [{ id_tipo_sangre: 99 }, /Tipo de sangre invalido/],
       [{ id_colonia: 9999 }, /Colonia no encontrada/]
     ];
@@ -105,8 +106,10 @@ describe('POST /api/auth/registro', () => {
 
   it('es transaccional: si falla el INSERT del donante no queda usuario huerfano', async () => {
     const antes = await contarFilas('usuarios');
-    // latitud fuera de NUMERIC(9,6) hace fallar el segundo INSERT
-    const res = await registrar(donante({ email: 'huerfano@example.com', curp: 'HUER950520HBSRPN06', latitud: 99999 }));
+    // colonia_personalizada mayor a VARCHAR(150) hace fallar el segundo INSERT
+    const res = await registrar(donante({
+      email: 'huerfano@example.com', curp: 'HUER950520HBSRPN06', id_colonia: coloniaOtraLoreto, colonia_personalizada: 'x'.repeat(151)
+    }));
     assert.equal(res.status, 500);
     assert.equal(res.body.ok, false);
     assert.equal(await contarFilas('usuarios'), antes);

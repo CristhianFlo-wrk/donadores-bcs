@@ -1,28 +1,38 @@
-import { verificarHistorial, obtenerHistorialDonante, obtenerEstado } from './auditoria.service.js';
+import {
+  verificarHistorial,
+  obtenerHistorialDonante,
+  obtenerHashDonante,
+  obtenerEstado
+} from './auditoria.service.js';
+import { errorValidacion } from '../../utils/errores.js';
 
-export function verificar(req, res) {
-  try {
-    const resultado = verificarHistorial(req.db, req.params.hashDonante);
-    res.json({ ok: true, ...resultado });
-  } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
+const REGEX_HASH = /^[0-9a-f]{64}$/;
+
+function validarHash(hash) {
+  if (!REGEX_HASH.test(hash)) {
+    throw errorValidacion('hashDonante debe ser un hash SHA-256 en hex (64 caracteres)');
   }
+  return hash;
 }
 
-export function historial(req, res) {
-  try {
-    const entradas = obtenerHistorialDonante(req.db, req.params.hashDonante);
-    res.json({ ok: true, total: entradas.length, entradas });
-  } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
-  }
+// Historial del propio donante sin exponer su hash en la URL
+export async function miHistorial(req, res) {
+  const hash = await obtenerHashDonante(req.usuario.id);
+  const [entradas, verificacion] = await Promise.all([obtenerHistorialDonante(hash), verificarHistorial(hash)]);
+  res.json({ ok: true, total: entradas.length, verificacion, entradas });
 }
 
-export function estado(req, res) {
-  try {
-    const resultado = obtenerEstado(req.db);
-    res.json({ ok: true, ...resultado });
-  } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
-  }
+export async function verificar(req, res) {
+  const verificacion = await verificarHistorial(validarHash(req.params.hashDonante));
+  res.json({ ok: true, verificacion });
+}
+
+export async function historial(req, res) {
+  const entradas = await obtenerHistorialDonante(validarHash(req.params.hashDonante));
+  res.json({ ok: true, total: entradas.length, entradas });
+}
+
+export async function estado(req, res) {
+  const resultado = await obtenerEstado();
+  res.json({ ok: true, estado: resultado });
 }

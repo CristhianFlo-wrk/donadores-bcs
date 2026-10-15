@@ -1,199 +1,216 @@
+import { query, transaccion } from '../../config/database.js';
+import { errorValidacion, errorNoEncontrado, ErrorHttp } from '../../utils/errores.js';
 import { buscarCompatibles } from '../donantes/donantes.service.js';
+import { registrarLog } from '../auditoria/auditoria.service.js';
 
-export function crearSolicitud(db, idHospital, datos) {
-  const { id_tipo_sangre, urgencia, descripcion } = datos;
+const URGENCIAS = ['critica', 'urgente'];
+const ESTADOS = ['activa', 'completada', 'cancelada'];
+const ESTADOS_CIERRE = ['completada', 'cancelada'];
 
-  if (!idHospital || !id_tipo_sangre || !urgencia) {
-    throw new Error('Faltan campos obligatorios: hospital, tipo de sangre y urgencia');
-  }
-
-  if (!['critica', 'urgente'].includes(urgencia)) {
-    throw new Error('Urgencia debe ser "critica" o "urgente"');
-  }
-
-  const hospital = db.prepare(
-    'SELECT id, id_nodo FROM hospitales WHERE id = ? AND activo = 1'
-  ).get(idHospital);
-
-  if (!hospital) {
-    throw new Error('Hospital no encontrado o inactivo');
-  }
-
-  const tipoSangre = db.prepare(
-    'SELECT id, codigo FROM tipos_sangre WHERE id = ?'
-  ).get(id_tipo_sangre);
-
-  if (!tipoSangre) {
-    throw new Error('Tipo de sangre inválido');
-  }
-
-  const result = db.prepare(`
-    INSERT INTO solicitudes (id_hospital, id_tipo_sangre, urgencia, descripcion, estado)
-    VALUES (?, ?, ?, ?, 'activa')
-  `).run(idHospital, id_tipo_sangre, urgencia, descripcion || null);
-
-  return obtenerSolicitudPorId(db, result.lastInsertRowid);
+// Admin accede a cualquier hospital; un usuario hospital solo al suyo
+export function verificarAccesoHospital(usuario, idHospital) {
+  if (usuario.rol === 'admin') return;
+  if (usuario.rol === 'hospital' && usuario.id_hospital === idHospital) return;
+  throw new ErrorHttp(403, 'Sin permisos sobre las solicitudes de este hospital');
 }
 
-export function obtenerSolicitudPorId(db, idSolicitud) {
-  const solicitud = db.prepare(`
-    SELECT s.*, 
-           h.nombre as hospital_nombre,
-           h.institucion,
-           h.id_nodo as hospital_nodo,
-           ts.codigo as tipo_sangre,
-           ts.grupo, ts.rh
+export async function crearSolicitud(idHospital, datos, contexto = {}) {
+  const { id_tipo_sangre: idTipoSangre, urgencia, descripcion } = datos;
+
+  if (!idTipoSangre || !urgencia) {
+    throw errorValidacion('Faltan campos obligatorios: id_tipo_sangre y urgencia');
+  }
+
+  if (!URGENCIAS.includes(urgencia)) {
+    throw errorValidacion('urgencia debe ser "critica" o "urgente"');
+  }
+
+  const hospital = await query('SELECT id FROM hospitales WHERE id = $1 AND activo = TRUE', [idHospital]);
+  if (hospital.rows.length === 0) {
+    throw errorValidacion('Hospital no encontrado o inactivo');
+  }
+
+  const tipo = await query('SELECT id FROM tipos_sangre WHERE id = $1', [idTipoSangre]);
+  if (tipo.rows.length === 0) {
+    throw errorValidacion('Tipo de sangre invalido');
+  }
+
+  const idSolicitud = await transaccion(async (client) => {
+    const { rows } = await client.query(`
+      INSERT INTO solicitudes (id_hospital, id_tipo_sangre, urgencia, descripcion, estado)
+      VALUES ($1, $2, $3, $4, 'activa')
+      RETURNING id
+    `, [idHospital, idTipoSangre, urgencia, descripcion ? String(descripcion).trim() : null]);
+
+    await registrarLog(client, {
+      idUsuario: contexto.idUsuario,
+      accion: 'SOLICITUD_CREADA',
+      detalles: { id_solicitud: rows[0].id, id_hospital: idHospital, id_tipo_sangre: Number(idTipoSangre), urgencia },
+      ipOrigen: contexto.ip
+    });
+
+    return rows[0].id;
+  });
+
+  console.log('[SOLICITUDES] Solicitud creada id=' + idSolicitud + ' hospital=' + idHospital);
+
+  return obtenerSolicitudPorId(idSolicitud, { incluirNotificaciones: true });
+}
+
+// Datos basicos de la solicitud sin detalle; lanza 404 si no existe
+export async function obtenerSolicitudBase(idSolicitud) {
+  const { rows } = await query(`
+    SELECT s.*, h.nombre AS hospital_nombre, h.institucion, h.region AS hospital_region,
+           ts.codigo AS tipo_sangre
     FROM solicitudes s
     JOIN hospitales h ON s.id_hospital = h.id
     JOIN tipos_sangre ts ON s.id_tipo_sangre = ts.id
-    WHERE s.id = ?
-  `).get(idSolicitud);
+    WHERE s.id = $1
+  `, [idSolicitud]);
 
-  if (!solicitud) return null;
+  if (rows.length === 0) {
+    throw errorNoEncontrado('Solicitud no encontrada');
+  }
+  return rows[0];
+}
 
-  const notificaciones = db.prepare(`
-    SELECT n.*, d.curp_hash
-    FROM notificaciones n
-    JOIN donantes d ON n.id_donante = d.id
-    WHERE n.id_solicitud = ?
-    ORDER BY n.fecha_envio DESC
-  `).all(idSolicitud);
+// incluirNotificaciones: solo para el hospital dueno y admin
+export async function obtenerSolicitudPorId(idSolicitud, { incluirNotificaciones = false } = {}) {
+  const solicitud = await obtenerSolicitudBase(idSolicitud);
 
-  const confirmaciones = notificaciones.filter(n => n.estado === 'confirmada').length;
-  const pendientes = notificaciones.filter(n => n.estado === 'enviada').length;
+  const { rows: metricas } = await query(`
+    SELECT COUNT(*) AS total_notificados,
+           COUNT(*) FILTER (WHERE estado = 'confirmada') AS confirmaciones,
+           COUNT(*) FILTER (WHERE estado = 'enviada') AS pendientes,
+           COUNT(*) FILTER (WHERE estado = 'rechazada') AS rechazadas,
+           COUNT(*) FILTER (WHERE estado = 'donada') AS donaciones
+    FROM notificaciones
+    WHERE id_solicitud = $1
+  `, [idSolicitud]);
 
-  return {
+  const resultado = {
     id: solicitud.id,
     hospital: {
       id: solicitud.id_hospital,
       nombre: solicitud.hospital_nombre,
       institucion: solicitud.institucion,
-      id_nodo: solicitud.hospital_nodo
+      region: solicitud.hospital_region
     },
+    id_tipo_sangre: solicitud.id_tipo_sangre,
     tipo_sangre: solicitud.tipo_sangre,
     urgencia: solicitud.urgencia,
     estado: solicitud.estado,
     descripcion: solicitud.descripcion,
     fecha_solicitud: solicitud.fecha_solicitud,
     fecha_cierre: solicitud.fecha_cierre,
-    metricas: {
-      total_notificados: notificaciones.length,
-      confirmaciones,
-      pendientes,
-      rechazadas: notificaciones.length - confirmaciones - pendientes
-    },
-    notificaciones: notificaciones.map(n => ({
-      id: n.id,
-      donante_hash: n.curp_hash.substring(0, 16) + '...',
-      canal: n.canal,
-      estado: n.estado,
-      fecha_envio: n.fecha_envio,
-      fecha_respuesta: n.fecha_respuesta
-    }))
+    metricas: metricas[0]
   };
+
+  if (incluirNotificaciones) {
+    const { rows: notificaciones } = await query(`
+      SELECT id, id_donante, canal, estado, fecha_envio, fecha_respuesta
+      FROM notificaciones
+      WHERE id_solicitud = $1
+      ORDER BY fecha_envio DESC
+    `, [idSolicitud]);
+    resultado.notificaciones = notificaciones;
+  }
+
+  return resultado;
 }
 
-export function listarSolicitudes(db, filtros = {}) {
-  const { estado, id_hospital, id_nodo, limite = 50 } = filtros;
+export async function listarSolicitudes(filtros = {}) {
+  const { estado, idHospital, region, limite = 50 } = filtros;
 
-  let query = `
-    SELECT s.id, s.urgencia, s.estado, s.fecha_solicitud,
-           h.nombre as hospital_nombre,
-           h.id_nodo as hospital_nodo,
-           ts.codigo as tipo_sangre
+  if (estado && !ESTADOS.includes(estado)) {
+    throw errorValidacion('estado debe ser activa, completada o cancelada');
+  }
+
+  const valores = [];
+  let sql = `
+    SELECT s.id, s.urgencia, s.estado, s.fecha_solicitud, s.id_hospital,
+           h.nombre AS hospital_nombre,
+           h.region AS region,
+           ts.codigo AS tipo_sangre
     FROM solicitudes s
     JOIN hospitales h ON s.id_hospital = h.id
     JOIN tipos_sangre ts ON s.id_tipo_sangre = ts.id
-    WHERE 1=1
+    WHERE TRUE
   `;
 
-  const valores = [];
-
   if (estado) {
-    query += ' AND s.estado = ?';
     valores.push(estado);
+    sql += ` AND s.estado = $${valores.length}`;
   }
 
-  if (id_hospital) {
-    query += ' AND s.id_hospital = ?';
-    valores.push(id_hospital);
+  if (idHospital) {
+    valores.push(idHospital);
+    sql += ` AND s.id_hospital = $${valores.length}`;
   }
 
-  if (id_nodo) {
-    query += ' AND h.id_nodo = ?';
-    valores.push(id_nodo);
+  if (region) {
+    valores.push(region);
+    sql += ` AND h.region = $${valores.length}`;
   }
 
-  query += ' ORDER BY s.fecha_solicitud DESC LIMIT ?';
   valores.push(limite);
+  sql += ` ORDER BY (s.urgencia = 'critica') DESC, s.fecha_solicitud DESC LIMIT $${valores.length}`;
 
-  const solicitudes = db.prepare(query).all(...valores);
-
-  return solicitudes.map(s => ({
-    id: s.id,
-    hospital: s.hospital_nombre,
-    id_nodo: s.hospital_nodo,
-    tipo_sangre: s.tipo_sangre,
-    urgencia: s.urgencia,
-    estado: s.estado,
-    fecha_solicitud: s.fecha_solicitud
-  }));
+  const { rows } = await query(sql, valores);
+  return rows;
 }
 
-export function buscarCandidatos(db, idSolicitud, filtros = {}) {
-  const solicitud = db.prepare(`
-    SELECT s.id, s.id_hospital, s.id_tipo_sangre, s.estado,
-           h.id_nodo as hospital_nodo
-    FROM solicitudes s
-    JOIN hospitales h ON s.id_hospital = h.id
-    WHERE s.id = ?
-  `).get(idSolicitud);
-
-  if (!solicitud) {
-    throw new Error('Solicitud no encontrada');
-  }
+export async function buscarCandidatos(idSolicitud, filtros = {}) {
+  const solicitud = await obtenerSolicitudBase(idSolicitud);
 
   if (solicitud.estado !== 'activa') {
-    throw new Error('La solicitud no está activa');
+    throw errorValidacion('La solicitud no esta activa');
   }
 
-  const candidatos = buscarCompatibles(db, solicitud.id_tipo_sangre, {
-    idNodo: filtros.idNodo || null,
-    soloDisponibles: true,
+  const candidatos = await buscarCompatibles(solicitud.id_tipo_sangre, {
+    region: filtros.region || null,
     limite: filtros.limite || 50
   });
 
   return {
-    solicitud_id: idSolicitud,
-    hospital_nodo: solicitud.hospital_nodo,
-    tipo_sangre_requerido: solicitud.id_tipo_sangre,
+    id_solicitud: solicitud.id,
+    hospital_region: solicitud.hospital_region,
+    tipo_sangre_requerido: solicitud.tipo_sangre,
     total_candidatos: candidatos.length,
     candidatos
   };
 }
 
-export function cerrarSolicitud(db, idSolicitud, nuevoEstado) {
-  if (!['completada', 'cancelada'].includes(nuevoEstado)) {
-    throw new Error('Estado debe ser "completada" o "cancelada"');
+export async function cerrarSolicitud(idSolicitud, nuevoEstado, contexto = {}) {
+  if (!ESTADOS_CIERRE.includes(nuevoEstado)) {
+    throw errorValidacion('estado debe ser "completada" o "cancelada"');
   }
 
-  const solicitud = db.prepare(
-    'SELECT id, estado FROM solicitudes WHERE id = ?'
-  ).get(idSolicitud);
+  // El WHERE estado = 'activa' evita cerrar dos veces si llegan dos peticiones simultaneas
+  const cerrada = await transaccion(async (client) => {
+    const { rowCount } = await client.query(`
+      UPDATE solicitudes
+      SET estado = $1, fecha_cierre = NOW()
+      WHERE id = $2 AND estado = 'activa'
+    `, [nuevoEstado, idSolicitud]);
 
-  if (!solicitud) {
-    throw new Error('Solicitud no encontrada');
+    if (rowCount === 0) return false;
+
+    await registrarLog(client, {
+      idUsuario: contexto.idUsuario,
+      accion: 'SOLICITUD_CERRADA',
+      detalles: { id_solicitud: idSolicitud, estado: nuevoEstado },
+      ipOrigen: contexto.ip
+    });
+    return true;
+  });
+
+  if (!cerrada) {
+    const solicitud = await obtenerSolicitudBase(idSolicitud);
+    throw errorValidacion('La solicitud ya esta ' + solicitud.estado);
   }
 
-  if (solicitud.estado !== 'activa') {
-    throw new Error(`La solicitud ya está ${solicitud.estado}`);
-  }
+  console.log('[SOLICITUDES] Solicitud id=' + idSolicitud + ' cerrada como ' + nuevoEstado);
 
-  db.prepare(`
-    UPDATE solicitudes 
-    SET estado = ?, fecha_cierre = ?
-    WHERE id = ?
-  `).run(nuevoEstado, new Date().toISOString(), idSolicitud);
-
-  return obtenerSolicitudPorId(db, idSolicitud);
+  return obtenerSolicitudPorId(idSolicitud, { incluirNotificaciones: true });
 }

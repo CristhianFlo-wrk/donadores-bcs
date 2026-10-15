@@ -10,10 +10,13 @@ import { verificarToken, soloRol } from '../../middleware/auth.js';
 
 const router = Router();
 
-router.post('/', verificarToken, postSolicitud);
+// Cualquier usuario autenticado puede ver solicitudes (los donantes ven las activas)
 router.get('/', verificarToken, getSolicitudes);
 router.get('/:id', verificarToken, getSolicitud);
-router.get('/:id/candidatos', verificarToken, getCandidatos);
-router.patch('/:id/cerrar', verificarToken, patchCerrar);
+
+// hospital dueno de la solicitud o admin (el dueno se valida en el controller)
+router.post('/', verificarToken, soloRol('hospital', 'admin'), postSolicitud);
+router.get('/:id/candidatos', verificarToken, soloRol('hospital', 'admin'), getCandidatos);
+router.patch('/:id/cerrar', verificarToken, soloRol('hospital', 'admin'), patchCerrar);
 
 export default router;

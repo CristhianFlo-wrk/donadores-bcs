@@ -33,7 +33,6 @@ async function resetearSecuencias(client) {
 
 // Ejecuta schema + seeds sobre la base indicada. La usan el script y los tests
 export async function inicializarBaseDatos(connectionString, { silencioso = false } = {}) {
-  // schema.pg.sql hace DROP TABLE, nunca debe correr contra produccion
   if (process.env.NODE_ENV === 'production') {
     throw new Error('init-db bloqueado con NODE_ENV=production');
   }

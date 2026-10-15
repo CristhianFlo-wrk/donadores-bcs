@@ -68,7 +68,7 @@ CREATE TABLE usuarios (
     rol VARCHAR(20) CHECK (rol IN ('donante', 'hospital', 'admin')) NOT NULL,
     id_hospital INTEGER REFERENCES hospitales(id),
     activo BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     CHECK ((rol = 'hospital') = (id_hospital IS NOT NULL))
 );
 
@@ -89,9 +89,9 @@ CREATE TABLE donantes (
     disponible BOOLEAN DEFAULT TRUE,
     peso_kg NUMERIC(5,2) CHECK (peso_kg >= 50),
     ha_donado_antes BOOLEAN DEFAULT FALSE,
-    ultima_donacion TIMESTAMP,
+    ultima_donacion TIMESTAMPTZ,
     fcm_token TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE solicitudes (
@@ -101,8 +101,8 @@ CREATE TABLE solicitudes (
     urgencia VARCHAR(20) CHECK (urgencia IN ('critica', 'urgente')) NOT NULL,
     estado VARCHAR(20) CHECK (estado IN ('activa', 'completada', 'cancelada')) DEFAULT 'activa',
     descripcion TEXT,
-    fecha_solicitud TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    fecha_cierre TIMESTAMP
+    fecha_solicitud TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    fecha_cierre TIMESTAMPTZ
 );
 
 CREATE TABLE notificaciones (
@@ -110,23 +110,23 @@ CREATE TABLE notificaciones (
     id_solicitud INTEGER NOT NULL REFERENCES solicitudes(id),
     id_donante INTEGER NOT NULL REFERENCES donantes(id),
     canal VARCHAR(20) CHECK (canal IN ('push', 'sms')) NOT NULL,
-    estado VARCHAR(20) CHECK (estado IN ('enviada', 'confirmada', 'rechazada')) DEFAULT 'enviada',
-    fecha_envio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    fecha_respuesta TIMESTAMP,
+    estado VARCHAR(20) CHECK (estado IN ('enviada', 'confirmada', 'rechazada', 'donada')) DEFAULT 'enviada',
+    fecha_envio TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    fecha_respuesta TIMESTAMPTZ,
     UNIQUE (id_solicitud, id_donante)
 );
 
 CREATE TABLE historial_donaciones (
     id SERIAL PRIMARY KEY,
     id_donante_hash VARCHAR(64) NOT NULL,
-    fecha_donacion TIMESTAMP NOT NULL,
+    fecha_donacion TIMESTAMPTZ NOT NULL,
     grupo_sanguineo VARCHAR(3) NOT NULL,
     id_hospital INTEGER NOT NULL REFERENCES hospitales(id),
     region VARCHAR(20) CHECK (region IN ('norte', 'centro', 'sur')) NOT NULL,
     hash_anterior VARCHAR(64) NOT NULL,
     hash_actual VARCHAR(64) NOT NULL,
     firma_hospital VARCHAR(255),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE auditoria_logs (
@@ -137,7 +137,7 @@ CREATE TABLE auditoria_logs (
     ip_origen VARCHAR(45),
     hash_anterior VARCHAR(64),
     hash_actual VARCHAR(64),
-    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    fecha TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_donantes_tipo ON donantes(id_tipo_sangre);

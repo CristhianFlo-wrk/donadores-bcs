@@ -5,62 +5,46 @@ import {
   buscarCompatibles,
   obtenerStats
 } from './donantes.service.js';
+import { getRegion } from '../../config/regiones.js';
+import { parsearId, parsearLimite, errorValidacion } from '../../utils/errores.js';
+import { contextoDe } from '../auditoria/auditoria.service.js';
 
-export function getPerfil(req, res) {
-  try {
-    const perfil = obtenerPerfil(req.db, req.usuario.id);
-    if (!perfil) {
-      return res.status(404).json({ ok: false, error: 'Perfil no encontrado' });
-    }
-    res.json({ ok: true, perfil });
-  } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
-  }
+export async function getPerfil(req, res) {
+  const perfil = await obtenerPerfil(req.usuario.id);
+  res.json({ ok: true, perfil });
 }
 
-export function putPerfil(req, res) {
-  try {
-    const perfil = actualizarPerfil(req.db, req.usuario.id, req.body);
-    res.json({ ok: true, perfil });
-  } catch (error) {
-    res.status(400).json({ ok: false, error: error.message });
-  }
+export async function putPerfil(req, res) {
+  const perfil = await actualizarPerfil(req.usuario.id, req.body || {}, contextoDe(req));
+  res.json({ ok: true, perfil });
 }
 
-export function patchDisponibilidad(req, res) {
-  try {
-    const { disponible } = req.body;
-    if (typeof disponible !== 'boolean') {
-      return res.status(400).json({ ok: false, error: 'Campo "disponible" debe ser boolean' });
-    }
-    const resultado = cambiarDisponibilidad(req.db, req.usuario.id, disponible);
-    res.json({ ok: true, ...resultado });
-  } catch (error) {
-    res.status(400).json({ ok: false, error: error.message });
+export async function patchDisponibilidad(req, res) {
+  const { disponible } = req.body || {};
+  if (typeof disponible !== 'boolean') {
+    throw errorValidacion('Campo "disponible" debe ser boolean');
   }
+  const resultado = await cambiarDisponibilidad(req.usuario.id, disponible, contextoDe(req));
+  res.json({ ok: true, ...resultado });
 }
 
-export function getCompatibles(req, res) {
-  try {
-    const { idTipoSangre } = req.params;
-    const filtros = {
-      idNodo: req.query.nodo || null,
-      soloDisponibles: req.query.soloDisponibles !== 'false',
-      limite: parseInt(req.query.limite) || 50
-    };
-
-    const donantes = buscarCompatibles(req.db, idTipoSangre, filtros);
-    res.json({ ok: true, total: donantes.length, donantes });
-  } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
+export async function getCompatibles(req, res) {
+  const idTipoSangre = parsearId(req.params.idTipoSangre, 'idTipoSangre');
+  const { region } = req.query;
+  if (region && !getRegion(region)) {
+    throw errorValidacion('region debe ser norte, centro o sur');
   }
+
+  const donantes = await buscarCompatibles(idTipoSangre, {
+    region: region || null,
+    soloDisponibles: req.query.solo_disponibles !== 'false',
+    soloAptos: req.query.solo_aptos !== 'false',
+    limite: parsearLimite(req.query.limite)
+  });
+  res.json({ ok: true, total: donantes.length, donantes });
 }
 
-export function getStats(req, res) {
-  try {
-    const stats = obtenerStats(req.db, req.usuario.id);
-    res.json({ ok: true, stats });
-  } catch (error) {
-    res.status(500).json({ ok: false, error: error.message });
-  }
+export async function getStats(req, res) {
+  const stats = await obtenerStats(req.usuario.id);
+  res.json({ ok: true, stats });
 }

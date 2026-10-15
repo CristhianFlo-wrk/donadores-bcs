@@ -1,7 +1,13 @@
 import 'dotenv/config';
 import pg from 'pg';
 
-const { Pool } = pg;
+const { Pool, types } = pg;
+
+// NUMERIC (latitud, longitud, peso_kg) 
+types.setTypeParser(types.builtins.NUMERIC, (valor) => parseFloat(valor));
+types.setTypeParser(types.builtins.INT8, (valor) => parseInt(valor, 10));
+// DATE se deja como 'YYYY-MM-DD'; convertirlo a Date lo desplaza por zona horaria
+types.setTypeParser(types.builtins.DATE, (valor) => valor);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -16,7 +22,6 @@ export async function query(text, params) {
   return pool.query(text, params);
 }
 
-// Ejecuta fn(client) dentro de BEGIN/COMMIT; si fn lanza error hace ROLLBACK
 export async function transaccion(fn) {
   const client = await pool.connect();
   try {

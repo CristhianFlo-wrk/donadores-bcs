@@ -9,11 +9,18 @@ import { ErrorHttp } from './utils/errores.js';
 import ubicacionesRoutes from './modules/ubicaciones/ubicaciones.routes.js';
 import hospitalesRoutes from './modules/hospitales/hospitales.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
+import donantesRoutes from './modules/donantes/donantes.routes.js';
+import solicitudesRoutes from './modules/solicitudes/solicitudes.routes.js';
+import auditoriaRoutes from './modules/auditoria/auditoria.routes.js';
+import notificacionesRoutes from './modules/notificaciones/notificaciones.routes.js';
 
 const VARIABLES_REQUERIDAS = ['DATABASE_URL', 'AES_KEY', 'JWT_SECRET', 'HASH_KEY'];
 
 export const app = express();
 const PORT = process.env.PORT || 3000;
+
+
+app.set('trust proxy', 1);
 
 app.use(helmet());
 app.use(cors());
@@ -31,12 +38,16 @@ app.get('/api/health', (req, res) => {
 app.use('/api/ubicaciones', ubicacionesRoutes);
 app.use('/api/hospitales', hospitalesRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/donantes', donantesRoutes);
+app.use('/api/solicitudes', solicitudesRoutes);
+app.use('/api/auditoria', auditoriaRoutes);
+app.use('/api/notificaciones', notificacionesRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ ok: false, error: 'Ruta no encontrada' });
 });
 
-// Express 5 manda aqui los errores no capturados, incluidos los de funciones async
+// Express manda errores no capturados, incluidos los de funciones async
 app.use((error, req, res, next) => {
   if (error.type === 'entity.parse.failed') {
     return res.status(400).json({ ok: false, error: 'JSON invalido' });

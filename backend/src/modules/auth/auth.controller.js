@@ -1,32 +1,24 @@
 import { registrarDonante, login } from './auth.service.js';
+import { errorValidacion } from '../../utils/errores.js';
 
 export async function registrar(req, res) {
-  try {
-    const resultado = await registrarDonante(req.db, req.body);
-    res.status(201).json({ ok: true, ...resultado });
-  } catch (error) {
-    res.status(400).json({ ok: false, error: error.message });
-  }
+  const usuario = await registrarDonante(req.body || {});
+  res.status(201).json({ ok: true, usuario });
 }
 
 export async function iniciarSesion(req, res) {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ ok: false, error: 'Email y password requeridos' });
-    }
-    const resultado = await login(req.db, email, password);
-    res.json({ ok: true, ...resultado });
-  } catch (error) {
-    res.status(401).json({ ok: false, error: error.message });
+  const { email, password } = req.body || {};
+  if (!email || !password) {
+    throw errorValidacion('Email y password requeridos');
   }
+  const { token, usuario } = await login(email, password);
+  res.json({ ok: true, token, usuario });
 }
 
 export function perfil(req, res) {
   // req.usuario lo pone el middleware verificarToken
-  res.json({
-    ok: true,
-    usuario: req.usuario,
-    nodo: req.nodo.id
-  });
+  const { id, email, rol, id_hospital: idHospital } = req.usuario;
+  const usuario = { id, email, rol };
+  if (idHospital) usuario.id_hospital = idHospital;
+  res.json({ ok: true, usuario });
 }

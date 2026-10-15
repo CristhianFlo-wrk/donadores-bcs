@@ -2,11 +2,13 @@ import jwt from 'jsonwebtoken';
 import { query, transaccion } from '../../config/database.js';
 import { hashPassword, verificarPassword, hashCURP, normalizarCURP, cifrar } from '../../utils/crypto.js';
 import { errorValidacion, ErrorHttp } from '../../utils/errores.js';
+import { resolverColonia } from '../ubicaciones/ubicaciones.service.js';
+import { validarPeso, validarCoordenadas } from '../donantes/donantes.validaciones.js';
+import { registrarLog } from '../auditoria/auditoria.service.js';
 
 const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const REGEX_CURP = /^[A-Z]{4}\d{6}[HMX][A-Z]{5}[A-Z0-9]\d$/;
 const SEXOS = ['M', 'F', 'otro'];
-const NOMBRE_COLONIA_OTRA = 'Otra';
 
 // Validaciones que no requieren base de datos
 function validarDatosRegistro(datos) {
@@ -43,18 +45,16 @@ function validarDatosRegistro(datos) {
     throw errorValidacion('sexo debe ser M, F u otro');
   }
 
-  if (pesoKg !== undefined && pesoKg !== null && !(Number(pesoKg) >= 50)) {
-    throw errorValidacion('El peso minimo para donar es 50 kg');
-  }
+  validarPeso(pesoKg);
+  validarCoordenadas(datos.latitud, datos.longitud);
 }
 
 // Registra un donante: crea usuario y donante en una sola transaccion
-export async function registrarDonante(datos) {
+export async function registrarDonante(datos, contexto = {}) {
   validarDatosRegistro(datos);
 
   const email = String(datos.email).trim().toLowerCase();
   const curpHash = hashCURP(datos.curp);
-  const coloniaPersonalizada = datos.colonia_personalizada ? String(datos.colonia_personalizada).trim() : null;
 
   try {
     return await transaccion(async (client) => {
@@ -73,25 +73,7 @@ export async function registrarDonante(datos) {
         throw errorValidacion('Tipo de sangre invalido');
       }
 
-      // La region del donante se deriva de colonia -> municipio
-      const colonia = await client.query(`
-        SELECT c.id, c.nombre, m.region
-        FROM colonias c
-        JOIN municipios m ON c.id_municipio = m.id
-        WHERE c.id = $1 AND c.activo = TRUE
-      `, [datos.id_colonia]);
-      if (colonia.rows.length === 0) {
-        throw errorValidacion('Colonia no encontrada');
-      }
-
-      // colonia_personalizada solo se acepta cuando se elige la colonia "Otra" del municipio
-      const esOtra = colonia.rows[0].nombre === NOMBRE_COLONIA_OTRA;
-      if (esOtra && !coloniaPersonalizada) {
-        throw errorValidacion('Si eliges la colonia "Otra" debes escribir colonia_personalizada');
-      }
-      if (!esOtra && coloniaPersonalizada) {
-        throw errorValidacion('colonia_personalizada solo aplica cuando eliges la colonia "Otra"');
-      }
+      const colonia = await resolverColonia(datos.id_colonia, datos.colonia_personalizada, client);
 
       const passwordHash = await hashPassword(datos.password);
 
@@ -117,13 +99,20 @@ export async function registrarDonante(datos) {
         datos.sexo || null,
         cifrar(datos.telefono),
         datos.id_tipo_sangre,
-        datos.id_colonia,
-        esOtra ? coloniaPersonalizada : null,
+        colonia.idColonia,
+        colonia.coloniaPersonalizada,
         datos.latitud ?? null,
         datos.longitud ?? null,
-        colonia.rows[0].region,
+        colonia.region,
         datos.peso_kg ?? null
       ]);
+
+      await registrarLog(client, {
+        idUsuario,
+        accion: 'REGISTRO_DONANTE',
+        detalles: { id_donante: donante.rows[0].id, region: colonia.region },
+        ipOrigen: contexto.ip
+      });
 
       console.log('[AUTH] Donante registrado, id_usuario=' + idUsuario);
 
@@ -132,7 +121,7 @@ export async function registrarDonante(datos) {
         id_donante: donante.rows[0].id,
         email,
         rol: 'donante',
-        region: colonia.rows[0].region
+        region: colonia.region
       };
     });
   } catch (error) {
@@ -145,7 +134,7 @@ export async function registrarDonante(datos) {
 }
 
 // Verifica credenciales y devuelve JWT
-export async function login(email, password) {
+export async function login(email, password, contexto = {}) {
   const { rows } = await query(`
     SELECT id, email, password_hash, rol, id_hospital, activo
     FROM usuarios
@@ -155,10 +144,17 @@ export async function login(email, password) {
   const usuario = rows[0];
 
   if (!usuario || !(await verificarPassword(String(password), usuario.password_hash))) {
+    await registrarLog(null, {
+      idUsuario: usuario ? usuario.id : null,
+      accion: 'LOGIN_FALLIDO',
+      detalles: { email: String(email).trim().toLowerCase() },
+      ipOrigen: contexto.ip
+    });
     throw new ErrorHttp(401, 'Credenciales invalidas');
   }
 
   if (!usuario.activo) {
+    await registrarLog(null, { idUsuario: usuario.id, accion: 'LOGIN_BLOQUEADO', ipOrigen: contexto.ip });
     throw new ErrorHttp(403, 'Usuario desactivado');
   }
 
@@ -166,6 +162,8 @@ export async function login(email, password) {
   if (usuario.rol === 'hospital') {
     datosToken.id_hospital = usuario.id_hospital;
   }
+
+  await registrarLog(null, { idUsuario: usuario.id, accion: 'LOGIN_EXITOSO', ipOrigen: contexto.ip });
 
   const token = jwt.sign(datosToken, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '8h'

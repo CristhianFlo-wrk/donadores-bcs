@@ -10,8 +10,9 @@ const __dirname = path.dirname(__filename);
 
 const schemaPath = path.join(__dirname, 'schema.pg.sql');
 const seedsPath = path.join(__dirname, 'seeds.pg.sql');
+const seedsDemoPath = path.join(__dirname, 'seeds.demo.pg.sql');
 
-async function ejecutarArchivo(client, ruta, etiqueta, silencioso) {
+export async function ejecutarArchivo(client, ruta, etiqueta, silencioso) {
   const contenido = fs.readFileSync(ruta, 'utf8');
   try {
     await client.query(contenido);
@@ -22,7 +23,7 @@ async function ejecutarArchivo(client, ruta, etiqueta, silencioso) {
   }
 }
 
-async function resetearSecuencias(client) {
+export async function resetearSecuencias(client) {
   const tablas = ['tipos_sangre', 'municipios', 'hospitales'];
   for (const tabla of tablas) {
     await client.query(
@@ -31,7 +32,6 @@ async function resetearSecuencias(client) {
   }
 }
 
-// Ejecuta schema + seeds sobre la base indicada. La usan el script y los tests
 export async function inicializarBaseDatos(connectionString, { silencioso = false } = {}) {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('init-db bloqueado con NODE_ENV=production');
@@ -44,6 +44,7 @@ export async function inicializarBaseDatos(connectionString, { silencioso = fals
     if (!silencioso) console.log('[DB] Conexion a PostgreSQL establecida');
     await ejecutarArchivo(client, schemaPath, 'schema.pg.sql', silencioso);
     await ejecutarArchivo(client, seedsPath, 'seeds.pg.sql', silencioso);
+    await ejecutarArchivo(client, seedsDemoPath, 'seeds.demo.pg.sql', silencioso);
     await resetearSecuencias(client);
     if (!silencioso) console.log('[OK] Secuencias reseteadas');
   } finally {

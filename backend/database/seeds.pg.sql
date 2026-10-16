@@ -1,3 +1,5 @@
+-- Catalogos (tipos de sangre, compatibilidad, municipios, colonias, hospitales)
+
 -- tipos de sangre
 INSERT INTO tipos_sangre (id, codigo, grupo, rh, descripcion, es_donante_universal, es_receptor_universal) VALUES
 (1, 'O-',  'O',  '-', 'Donante universal', TRUE,  FALSE),
@@ -7,7 +9,8 @@ INSERT INTO tipos_sangre (id, codigo, grupo, rh, descripcion, es_donante_univers
 (5, 'B-',  'B',  '-', 'Donante para B y AB', FALSE, FALSE),
 (6, 'B+',  'B',  '+', 'Donante comun',     FALSE, FALSE),
 (7, 'AB-', 'AB', '-', 'Donante para AB',   FALSE, FALSE),
-(8, 'AB+', 'AB', '+', 'Receptor universal', FALSE, TRUE);
+(8, 'AB+', 'AB', '+', 'Receptor universal', FALSE, TRUE)
+ON CONFLICT DO NOTHING;
 
 INSERT INTO compatibilidad_sanguinea VALUES
 (1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(1,8),
@@ -17,14 +20,16 @@ INSERT INTO compatibilidad_sanguinea VALUES
 (5,5),(5,6),(5,7),(5,8),
 (6,6),(6,8),
 (7,7),(7,8),
-(8,8);
+(8,8)
+ON CONFLICT DO NOTHING;
 
 INSERT INTO municipios (id, nombre, region, latitud, longitud) VALUES
 (1, 'Mulege',    'norte',  27.3333, -112.2667),
 (2, 'Loreto',    'centro', 26.0122, -111.3458),
 (3, 'Comondu',   'centro', 25.0322, -111.6634),
 (4, 'La Paz',    'sur',    24.1426, -110.3128),
-(5, 'Los Cabos', 'sur',    23.0614, -109.6970);
+(5, 'Los Cabos', 'sur',    23.0614, -109.6970)
+ON CONFLICT DO NOTHING;
 
 INSERT INTO colonias (id_municipio, nombre, codigo_postal, latitud, longitud) VALUES
 (1, 'Santa Rosalia Centro', '23920', 27.3389, -112.2678),
@@ -57,7 +62,8 @@ INSERT INTO colonias (id_municipio, nombre, codigo_postal, latitud, longitud) VA
 (5, 'Pedregal CSL',             '23454', 22.8845, -109.9189),
 (5, 'La Playita',               '23455', 22.8956, -109.9234),
 (5, 'San Jose Viejo',           '23420', 23.0567, -109.7012),
-(5, 'Otra',                     NULL,    NULL,    NULL);
+(5, 'Otra',                     NULL,    NULL,    NULL)
+ON CONFLICT DO NOTHING;
 
 INSERT INTO hospitales (id, nombre, institucion, region, direccion, latitud, longitud) VALUES
 (1, 'IMSS HGZ No. 1 La Paz', 'IMSS', 'sur',
@@ -90,18 +96,5 @@ INSERT INTO hospitales (id, nombre, institucion, region, direccion, latitud, lon
 
 (8, 'Hospital General San Jose', 'SSBCS', 'sur',
  'Col. Guaymitas, San Jose del Cabo, BCS',
- 23.0618, -109.7076);
-
--- usuarios demo 
--- admin@demo.donadores.mx / Admin12345
--- hospitalN@demo.donadores.mx / Hospital123 
-INSERT INTO usuarios (email, password_hash, rol, id_hospital) VALUES
-('admin@demo.donadores.mx', '$2b$10$hxnDCz6DGtREU438MjE4jOeFC4aanw60u2vTCA2Mxv6n1Jh4N/o/y', 'admin', NULL);
-
-INSERT INTO usuarios (email, password_hash, rol, id_hospital)
-SELECT 'hospital' || id || '@demo.donadores.mx',
-       '$2b$10$rlv2qmEqR1nMOSWUFL/SIuOCIdiv1yGYsMm.mUWr.MmsKPLb/vIq6',
-       'hospital',
-       id
-FROM hospitales
-ORDER BY id;
+ 23.0618, -109.7076)
+ON CONFLICT DO NOTHING;

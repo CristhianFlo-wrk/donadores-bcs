@@ -6,6 +6,8 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "init-db": "node database/initDB.js",
+    "init-db:prod": "node database/initProd.js",
+    "crear-admin": "node database/crearAdmin.js",
     "test": "node --import ./test/setup.js --test --test-concurrency=1 \"test/**/*.test.js\""
   },
   "dependencies": {

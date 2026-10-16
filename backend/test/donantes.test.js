@@ -188,3 +188,30 @@ describe('GET /api/donantes/stats', () => {
     assert.equal(stats.dias_para_poder_donar, 60);
   });
 });
+
+describe('PUT /api/donantes/fcm-token', () => {
+  it('guarda y borra el token del dispositivo', async () => {
+    const res = await request(app).put('/api/donantes/fcm-token').set(bearer(donante.token)).send({ fcm_token: 'token-dispositivo-123' });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.push_activo, true);
+    const { rows } = await query('SELECT fcm_token FROM donantes WHERE id = $1', [donante.id_donante]);
+    assert.equal(rows[0].fcm_token, 'token-dispositivo-123');
+
+    const borrar = await request(app).put('/api/donantes/fcm-token').set(bearer(donante.token)).send({ fcm_token: null });
+    assert.equal(borrar.body.push_activo, false);
+  });
+
+  it('valida el body y solo lo usan donantes', async () => {
+    assert.equal((await request(app).put('/api/donantes/fcm-token').set(bearer(donante.token)).send({})).status, 400);
+    assert.equal((await request(app).put('/api/donantes/fcm-token').set(bearer(donante.token)).send({ fcm_token: '  ' })).status, 400);
+    assert.equal((await request(app).put('/api/donantes/fcm-token').set(bearer(donante.token)).send({ fcm_token: 123 })).status, 400);
+    assert.equal((await request(app).put('/api/donantes/fcm-token').set(bearer(tokenHospital)).send({ fcm_token: 'x' })).status, 403);
+  });
+});
+
+describe('datos con formato invalido responden 400 y no 500', () => {
+  it('ids no numericos al actualizar perfil', async () => {
+    assert.equal((await request(app).put('/api/donantes/perfil').set(bearer(donante.token)).send({ id_tipo_sangre: 'abc' })).status, 400);
+    assert.equal((await request(app).put('/api/donantes/perfil').set(bearer(donante.token)).send({ id_colonia: 'abc' })).status, 400);
+  });
+});

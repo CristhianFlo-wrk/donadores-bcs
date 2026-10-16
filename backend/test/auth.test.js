@@ -115,6 +115,19 @@ describe('POST /api/auth/registro', () => {
     assert.equal(await contarFilas('usuarios'), antes);
   });
 
+  it('400 y no 500 con ids no numericos o fechas inexistentes', async () => {
+    const casos = [
+      { email: 'f1@example.com', curp: 'FORM950520HBSRPN07', id_tipo_sangre: 'abc' },
+      { email: 'f2@example.com', curp: 'FORM950520HBSRPN08', id_colonia: 'abc' },
+      { email: 'f3@example.com', curp: 'FORM950520HBSRPN09', fecha_nacimiento: '1995-02-31' }
+    ];
+    for (const caso of casos) {
+      const res = await registrar(donante(caso));
+      assert.equal(res.status, 400, JSON.stringify(caso));
+      assert.equal(res.body.ok, false);
+    }
+  });
+
   it('400 con JSON invalido', async () => {
     const res = await request(app).post('/api/auth/registro').set('Content-Type', 'application/json').send('{malo');
     assert.equal(res.status, 400);

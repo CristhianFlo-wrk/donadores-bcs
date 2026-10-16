@@ -20,7 +20,8 @@ export async function prepararBaseDatos() {
   await inicializarBaseDatos(process.env.DATABASE_URL, { silencioso: true });
 }
 
-export function generarToken(datos = { id: 1, email: 'prueba@test.com', rol: 'donante' }) {
+// verificarToken busca el usuario en la base: el id debe existir (1 = admin demo de seeds.demo.pg.sql)
+export function generarToken(datos = { id: 1, email: 'admin@demo.donadores.mx', rol: 'admin' }) {
   return jwt.sign(datos, process.env.JWT_SECRET, { expiresIn: '1h' });
 }
 
@@ -33,7 +34,7 @@ export async function idColonia(nombreColonia, nombreMunicipio) {
   return rows[0].id;
 }
 
-// No hay endpoint para crear usuarios hospital; se insertan directo
+// Atajo para tests que no prueban POST /api/auth/usuarios; se inserta directo
 export async function crearUsuarioHospital(email, password, idHospital) {
   const { rows } = await query(`
     INSERT INTO usuarios (email, password_hash, rol, id_hospital)

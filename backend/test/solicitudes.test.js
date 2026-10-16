@@ -54,6 +54,7 @@ describe('POST /api/solicitudes', () => {
     assert.equal((await crear(tokenHospital1, { id_tipo_sangre: 2, urgencia: 'normal' })).status, 400);
     assert.equal((await crear(tokenHospital1, { id_tipo_sangre: 99, urgencia: 'urgente' })).status, 400);
     assert.equal((await crear(tokenHospital1, { urgencia: 'urgente' })).status, 400);
+    assert.equal((await crear(tokenHospital1, { id_tipo_sangre: 'x', urgencia: 'urgente' })).status, 400);
     assert.equal((await crear(tokenAdmin, { id_hospital: 999, id_tipo_sangre: 2, urgencia: 'urgente' })).status, 400);
   });
 });
@@ -72,6 +73,7 @@ describe('GET /api/solicitudes', () => {
     assert.equal(hospital1.body.total, 1);
 
     assert.equal((await request(app).get('/api/solicitudes?estado=otra').set(bearer(donante.token))).status, 400);
+    assert.equal((await request(app).get('/api/solicitudes?estado=completada').set(bearer(donante.token))).status, 403);
     assert.equal((await request(app).get('/api/solicitudes')).status, 401);
   });
 });
@@ -131,6 +133,15 @@ describe('PATCH /api/solicitudes/:id/cerrar', () => {
     const otraVez = await request(app).patch('/api/solicitudes/1/cerrar').set(bearer(tokenHospital1)).send({ estado: 'cancelada' });
     assert.equal(otraVez.status, 400);
     assert.match(otraVez.body.error, /completada/);
+  });
+
+  it('el donante deja de ver la solicitud cerrada en el listado; el hospital la sigue viendo', async () => {
+    const delDonante = await request(app).get('/api/solicitudes').set(bearer(donante.token));
+    assert.ok(delDonante.body.solicitudes.every((s) => s.estado === 'activa'));
+    assert.ok(!delDonante.body.solicitudes.some((s) => s.id === 1));
+
+    const delHospital = await request(app).get('/api/solicitudes?estado=completada').set(bearer(tokenHospital1));
+    assert.ok(delHospital.body.solicitudes.some((s) => s.id === 1));
   });
 
   it('una solicitud cerrada ya no devuelve candidatos', async () => {

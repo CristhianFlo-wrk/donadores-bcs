@@ -1,20 +1,31 @@
 import jwt from 'jsonwebtoken';
+import { query } from '../config/database.js';
 
-export function verificarToken(req, res, next) {
+// Valida el JWT y luego confirma en la base que el usuario exista y siga activo.
+export async function verificarToken(req, res, next) {
   const [esquema, token] = (req.headers.authorization || '').split(' ');
   if (esquema !== 'Bearer' || !token) {
     return res.status(401).json({ ok: false, error: 'Token requerido' });
   }
 
+  let datos;
   try {
-    req.usuario = jwt.verify(token, process.env.JWT_SECRET);
-    next();
+    datos = jwt.verify(token, process.env.JWT_SECRET);
   } catch (error) {
-    res.status(401).json({ ok: false, error: 'Token invalido o expirado' });
+    return res.status(401).json({ ok: false, error: 'Token invalido o expirado' });
   }
+
+  const { rows } = await query('SELECT id, email, rol, id_hospital, activo FROM usuarios WHERE id = $1', [datos.id]);
+  const usuario = rows[0];
+  if (!usuario || !usuario.activo) {
+    return res.status(401).json({ ok: false, error: 'Usuario inexistente o desactivado' });
+  }
+
+  req.usuario = { id: usuario.id, email: usuario.email, rol: usuario.rol };
+  if (usuario.rol === 'hospital') req.usuario.id_hospital = usuario.id_hospital;
+  next();
 }
 
-// Usar despues de verificarToken
 export function soloRol(...roles) {
   return (req, res, next) => {
     if (!req.usuario || !roles.includes(req.usuario.rol)) {

@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { query, transaccion } from '../../config/database.js';
 import { hashPassword, verificarPassword, hashCURP, normalizarCURP, cifrar } from '../../utils/crypto.js';
-import { errorValidacion, ErrorHttp } from '../../utils/errores.js';
+import { errorValidacion, ErrorHttp, parsearId } from '../../utils/errores.js';
 import { resolverColonia } from '../ubicaciones/ubicaciones.service.js';
 import { validarPeso, validarCoordenadas } from '../donantes/donantes.validaciones.js';
 import { registrarLog } from '../auditoria/auditoria.service.js';
@@ -20,6 +20,9 @@ function validarDatosRegistro(datos) {
   if (!email || !password || !nombreCompleto || !curp || !fechaNacimiento || !idTipoSangre || !idColonia) {
     throw errorValidacion('Faltan campos obligatorios: email, password, nombre_completo, curp, fecha_nacimiento, id_tipo_sangre, id_colonia');
   }
+
+  parsearId(idTipoSangre, 'id_tipo_sangre');
+  parsearId(idColonia, 'id_colonia');
 
   if (!REGEX_EMAIL.test(email)) {
     throw errorValidacion('Email invalido');
@@ -172,11 +175,127 @@ export async function login(email, password, contexto = {}) {
   return { token, usuario: datosToken };
 }
 
+const ROLES_ADMINISTRADOS = ['hospital', 'admin'];
+
+// Solo admin: crea cuentas de hospital o admin (los donantes se registran solos)
+export async function crearUsuario(datos, contexto = {}) {
+  const { email, password, rol } = datos;
+
+  if (!email || !password || !rol) {
+    throw errorValidacion('Faltan campos obligatorios: email, password, rol');
+  }
+  if (!REGEX_EMAIL.test(email)) {
+    throw errorValidacion('Email invalido');
+  }
+  if (String(password).length < 8) {
+    throw errorValidacion('La contrasena debe tener al menos 8 caracteres');
+  }
+  if (!ROLES_ADMINISTRADOS.includes(rol)) {
+    throw errorValidacion('rol debe ser "hospital" o "admin"');
+  }
+
+  let idHospital = null;
+  if (rol === 'hospital') {
+    if (datos.id_hospital === undefined || datos.id_hospital === null) {
+      throw errorValidacion('id_hospital es obligatorio para usuarios hospital');
+    }
+    idHospital = parsearId(datos.id_hospital, 'id_hospital');
+  } else if (datos.id_hospital !== undefined && datos.id_hospital !== null) {
+    throw errorValidacion('Un usuario admin no lleva id_hospital');
+  }
+
+  const emailNormalizado = String(email).trim().toLowerCase();
+
+  try {
+    return await transaccion(async (client) => {
+      if (idHospital) {
+        const hospital = await client.query('SELECT id FROM hospitales WHERE id = $1 AND activo = TRUE', [idHospital]);
+        if (hospital.rows.length === 0) {
+          throw errorValidacion('Hospital no encontrado o inactivo');
+        }
+      }
+
+      const { rows } = await client.query(`
+        INSERT INTO usuarios (email, password_hash, rol, id_hospital)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, email, rol, id_hospital, activo, created_at
+      `, [emailNormalizado, await hashPassword(String(password)), rol, idHospital]);
+
+      await registrarLog(client, {
+        idUsuario: contexto.idUsuario,
+        accion: 'USUARIO_CREADO',
+        detalles: { id_usuario: rows[0].id, rol, id_hospital: idHospital },
+        ipOrigen: contexto.ip
+      });
+
+      console.log('[AUTH] Usuario ' + rol + ' creado, id_usuario=' + rows[0].id);
+      return rows[0];
+    });
+  } catch (error) {
+    if (error.code === '23505') {
+      throw errorValidacion('El email ya esta registrado');
+    }
+    throw error;
+  }
+}
+
+export async function listarUsuarios({ rol = null, limite = 50 } = {}) {
+  if (rol && !['donante', ...ROLES_ADMINISTRADOS].includes(rol)) {
+    throw errorValidacion('rol debe ser donante, hospital o admin');
+  }
+
+  const valores = [];
+  let sql = 'SELECT id, email, rol, id_hospital, activo, created_at FROM usuarios WHERE TRUE';
+  if (rol) {
+    valores.push(rol);
+    sql += ` AND rol = $${valores.length}`;
+  }
+  valores.push(limite);
+  sql += ` ORDER BY id ASC LIMIT $${valores.length}`;
+
+  const { rows } = await query(sql, valores);
+  return rows;
+}
+
+// Desactivar corta el acceso de inmediato: verificarToken revisa activo en cada peticion
+export async function cambiarActivoUsuario(idUsuario, activo, contexto = {}) {
+  if (typeof activo !== 'boolean') {
+    throw errorValidacion('Campo "activo" debe ser boolean');
+  }
+  if (idUsuario === contexto.idUsuario) {
+    throw errorValidacion('No puedes cambiar el estado de tu propia cuenta');
+  }
+
+  return transaccion(async (client) => {
+    const { rows } = await client.query(`
+      UPDATE usuarios SET activo = $1 WHERE id = $2
+      RETURNING id, email, rol, id_hospital, activo
+    `, [activo, idUsuario]);
+
+    if (rows.length === 0) {
+      throw new ErrorHttp(404, 'Usuario no encontrado');
+    }
+
+    await registrarLog(client, {
+      idUsuario: contexto.idUsuario,
+      accion: activo ? 'USUARIO_ACTIVADO' : 'USUARIO_DESACTIVADO',
+      detalles: { id_usuario: idUsuario },
+      ipOrigen: contexto.ip
+    });
+
+    return rows[0];
+  });
+}
+
 // Regresa null si la fecha no es valida
 function calcularEdad(fechaNacimiento) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fechaNacimiento))) return null;
-  const nacimiento = new Date(fechaNacimiento + 'T00:00:00');
-  if (Number.isNaN(nacimiento.getTime())) return null;
+  const [anio, mes, dia] = String(fechaNacimiento).split('-').map(Number);
+  const nacimiento = new Date(anio, mes - 1, dia);
+  // Date corrige fechas inexistentes (2000-02-31 -> 2000-03-02); se rechazan comparando las partes
+  if (nacimiento.getFullYear() !== anio || nacimiento.getMonth() !== mes - 1 || nacimiento.getDate() !== dia) {
+    return null;
+  }
 
   const hoy = new Date();
   let edad = hoy.getFullYear() - nacimiento.getFullYear();

@@ -146,6 +146,21 @@ export async function obtenerHashDonante(idUsuario) {
   return rows[0].curp_hash;
 }
 
+// Para que un hospital verifique al donante de una de sus notificaciones sin conocer su hash
+export async function obtenerHashPorNotificacion(idNotificacion) {
+  const { rows } = await query(`
+    SELECT d.curp_hash, s.id_hospital
+    FROM notificaciones n
+    JOIN donantes d ON n.id_donante = d.id
+    JOIN solicitudes s ON n.id_solicitud = s.id
+    WHERE n.id = $1
+  `, [idNotificacion]);
+  if (rows.length === 0) {
+    throw errorNoEncontrado('Notificacion no encontrada');
+  }
+  return { hash: rows[0].curp_hash, idHospital: rows[0].id_hospital };
+}
+
 export async function obtenerEstado() {
   const { rows } = await query(`
     SELECT

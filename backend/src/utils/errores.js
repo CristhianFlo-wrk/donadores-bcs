@@ -9,6 +9,13 @@ export class ErrorHttp extends Error {
 export const errorValidacion = (mensaje) => new ErrorHttp(400, mensaje);
 export const errorNoEncontrado = (mensaje) => new ErrorHttp(404, mensaje);
 
+// Codigos de PostgreSQL que indican un dato mal formado enviado por el cliente:
+const CODIGOS_DATO_INVALIDO = ['22P02', '22003', '22007', '22008'];
+
+export function esDatoInvalidoPg(error) {
+  return CODIGOS_DATO_INVALIDO.includes(error.code);
+}
+
 // Convierte un parametro de ruta o query a entero positivo, o lanza 400
 export function parsearId(valor, nombre = 'id') {
   const numero = Number(valor);

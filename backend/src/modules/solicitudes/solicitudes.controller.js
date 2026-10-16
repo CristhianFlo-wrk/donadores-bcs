@@ -39,9 +39,19 @@ export async function postSolicitud(req, res) {
   res.status(201).json({ ok: true, solicitud });
 }
 
+// El donante solo ve solicitudes activas; hospital y admin ven cualquier estado
 export async function getSolicitudes(req, res) {
+  let estado = req.query.estado || null;
+  if (req.usuario.rol === 'donante') {
+    if (estado === 'completada' || estado === 'cancelada') {
+      throw new ErrorHttp(403, 'Un donante solo puede consultar solicitudes activas');
+    }
+    // Un estado invalido llega tal cual al service, que responde 400
+    estado = estado || 'activa';
+  }
+
   const solicitudes = await listarSolicitudes({
-    estado: req.query.estado || null,
+    estado,
     idHospital: req.query.id_hospital ? parsearId(req.query.id_hospital, 'id_hospital') : null,
     region: validarRegion(req.query.region),
     limite: parsearLimite(req.query.limite)

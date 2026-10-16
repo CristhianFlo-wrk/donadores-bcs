@@ -32,7 +32,7 @@ export async function patchResponder(req, res) {
     throw errorValidacion('Campo "respuesta" es obligatorio');
   }
 
-  const notificacion = await responderNotificacion(req.usuario.id, parsearId(req.params.id), respuesta);
+  const notificacion = await responderNotificacion(req.usuario.id, parsearId(req.params.id), respuesta, contextoDe(req));
   res.json({ ok: true, notificacion });
 }
 

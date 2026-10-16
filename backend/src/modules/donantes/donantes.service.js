@@ -1,6 +1,6 @@
 import { query, transaccion } from '../../config/database.js';
 import { descifrar, cifrar } from '../../utils/crypto.js';
-import { errorValidacion, errorNoEncontrado } from '../../utils/errores.js';
+import { errorValidacion, errorNoEncontrado, parsearId } from '../../utils/errores.js';
 import { resolverColonia } from '../ubicaciones/ubicaciones.service.js';
 import { validarPeso, validarCoordenadas } from './donantes.validaciones.js';
 import { registrarLog } from '../auditoria/auditoria.service.js';
@@ -91,6 +91,7 @@ export async function actualizarPerfil(idUsuario, cambios, contexto = {}) {
 
   await transaccion(async (client) => {
     if (cambios.id_colonia !== undefined) {
+      parsearId(cambios.id_colonia, 'id_colonia');
       const colonia = await resolverColonia(cambios.id_colonia, cambios.colonia_personalizada, client);
       agregar('id_colonia', colonia.idColonia);
       agregar('colonia_personalizada', colonia.coloniaPersonalizada);
@@ -98,6 +99,7 @@ export async function actualizarPerfil(idUsuario, cambios, contexto = {}) {
     }
 
     if (cambios.id_tipo_sangre !== undefined) {
+      parsearId(cambios.id_tipo_sangre, 'id_tipo_sangre');
       const tipo = await client.query('SELECT id FROM tipos_sangre WHERE id = $1', [cambios.id_tipo_sangre]);
       if (tipo.rows.length === 0) {
         throw errorValidacion('Tipo de sangre invalido');
@@ -153,6 +155,22 @@ export async function cambiarDisponibilidad(idUsuario, disponible, contexto = {}
 
     return { disponible: rows[0].disponible };
   });
+}
+
+export async function actualizarFcmToken(idUsuario, fcmToken) {
+  if (fcmToken !== null && (typeof fcmToken !== 'string' || !fcmToken.trim() || fcmToken.length > 4096)) {
+    throw errorValidacion('fcm_token debe ser un texto no vacio de hasta 4096 caracteres o null');
+  }
+
+  const { rowCount } = await query(
+    'UPDATE donantes SET fcm_token = $1 WHERE id_usuario = $2',
+    [fcmToken === null ? null : fcmToken.trim(), idUsuario]
+  );
+  if (rowCount === 0) {
+    throw errorNoEncontrado('Perfil de donante no encontrado');
+  }
+
+  return { push_activo: fcmToken !== null };
 }
 
 // Donantes compatibles con un tipo de sangre receptor, para hospitales y admin

@@ -11,9 +11,12 @@ export async function inicializarFirebase() {
 
   try {
     const admin = await import('firebase-admin');
-    firebaseApp = admin.default.initializeApp({
-      projectId: process.env.FIREBASE_PROJECT_ID
-    });
+    const opciones = { projectId: process.env.FIREBASE_PROJECT_ID };
+    // En Render no hay credenciales por defecto: se pasa el JSON de la cuenta de servicio en una variable
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      opciones.credential = admin.default.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT));
+    }
+    firebaseApp = admin.default.initializeApp(opciones);
     console.log('[NOTIFICACIONES] Firebase inicializado');
     return firebaseApp;
   } catch (error) {
@@ -22,7 +25,8 @@ export async function inicializarFirebase() {
   }
 }
 
-export async function enviarPushReal(tokenDispositivo, titulo, cuerpo) {
+// datos: pares string -> string que la app recibe junto al push (ej. id_notificacion)
+export async function enviarPushReal(tokenDispositivo, titulo, cuerpo, datos = {}) {
   const app = await inicializarFirebase();
   if (!app) {
     return { ok: false, error: 'Firebase no configurado' };
@@ -32,7 +36,8 @@ export async function enviarPushReal(tokenDispositivo, titulo, cuerpo) {
     const admin = await import('firebase-admin');
     const mensaje = {
       token: tokenDispositivo,
-      notification: { title: titulo, body: cuerpo }
+      notification: { title: titulo, body: cuerpo },
+      data: datos
     };
     const result = await admin.default.messaging().send(mensaje);
     return { ok: true, canal: 'push', modo: 'real', messageId: result };

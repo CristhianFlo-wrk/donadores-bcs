@@ -1,5 +1,5 @@
 import { query, transaccion } from '../../config/database.js';
-import { errorValidacion, errorNoEncontrado, ErrorHttp } from '../../utils/errores.js';
+import { errorValidacion, errorNoEncontrado, ErrorHttp, parsearId } from '../../utils/errores.js';
 import { buscarCompatibles } from '../donantes/donantes.service.js';
 import { registrarLog } from '../auditoria/auditoria.service.js';
 
@@ -24,6 +24,8 @@ export async function crearSolicitud(idHospital, datos, contexto = {}) {
   if (!URGENCIAS.includes(urgencia)) {
     throw errorValidacion('urgencia debe ser "critica" o "urgente"');
   }
+
+  parsearId(idTipoSangre, 'id_tipo_sangre');
 
   const hospital = await query('SELECT id FROM hospitales WHERE id = $1 AND activo = TRUE', [idHospital]);
   if (hospital.rows.length === 0) {

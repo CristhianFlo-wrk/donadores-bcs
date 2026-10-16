@@ -3,7 +3,8 @@ import {
   actualizarPerfil,
   cambiarDisponibilidad,
   buscarCompatibles,
-  obtenerStats
+  obtenerStats,
+  actualizarFcmToken
 } from './donantes.service.js';
 import { getRegion } from '../../config/regiones.js';
 import { parsearId, parsearLimite, errorValidacion } from '../../utils/errores.js';
@@ -25,6 +26,15 @@ export async function patchDisponibilidad(req, res) {
     throw errorValidacion('Campo "disponible" debe ser boolean');
   }
   const resultado = await cambiarDisponibilidad(req.usuario.id, disponible, contextoDe(req));
+  res.json({ ok: true, ...resultado });
+}
+
+export async function putFcmToken(req, res) {
+  const body = req.body || {};
+  if (body.fcm_token === undefined) {
+    throw errorValidacion('Campo "fcm_token" es obligatorio (null para desactivar)');
+  }
+  const resultado = await actualizarFcmToken(req.usuario.id, body.fcm_token);
   res.json({ ok: true, ...resultado });
 }
 

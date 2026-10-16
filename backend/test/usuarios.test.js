@@ -97,3 +97,4 @@ describe('PATCH /api/auth/usuarios/:id/activo', () => {
     assert.equal((await request(app).patch('/api/auth/usuarios/1/activo').set(bearer(tokenHospital1)).send({ activo: false })).status, 403);
   });
 });
+

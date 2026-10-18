@@ -38,7 +38,7 @@ before(async () => {
 });
 after(cerrarPool);
 
-describe('GET /api/reportes/dashboard (RF-09)', () => {
+describe('GET /api/reportes/dashboard', () => {
   it('admin ve el resumen de todo el sistema', async () => {
     const res = await request(app).get('/api/reportes/dashboard').set(bearer(tokenAdmin));
     assert.equal(res.status, 200);

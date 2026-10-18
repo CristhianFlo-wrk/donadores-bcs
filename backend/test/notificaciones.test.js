@@ -80,14 +80,13 @@ describe('donante: mis-notificaciones y responder', () => {
   it('el donante ve sus notificaciones', async () => {
     const res = await request(app).get('/api/notificaciones/mis-notificaciones').set(bearer(donanteSur.token));
     assert.equal(res.status, 200);
-    // Una de la solicitud urgente y otra de la critica (ya cancelada)
     assert.equal(res.body.total, 2);
     const deLaUrgente = res.body.notificaciones.find((n) => n.id_solicitud === idSolicitud);
     assert.equal(deLaUrgente.urgencia, 'urgente');
     assert.equal(deLaUrgente.solicitud_estado, 'activa');
   });
 
-  it('no puede responder la notificacion de otro donante (bug 2)', async () => {
+  it('no puede responder la notificacion de otro donante', async () => {
     const ajena = await notificacionDe(donanteSur2.id_donante);
     const res = await request(app).patch(`/api/notificaciones/${ajena.id}/responder`).set(bearer(donanteSur.token)).send({ respuesta: 'confirmada' });
     assert.equal(res.status, 404);
@@ -107,7 +106,7 @@ describe('donante: mis-notificaciones y responder', () => {
     assert.equal(rechaza.status, 200);
   });
 
-  it('la confirmacion y el rechazo quedan en auditoria_logs (RF-08)', async () => {
+  it('la confirmacion y el rechazo quedan en auditoria_logs', async () => {
     const { rows } = await query(
       "SELECT accion, id_usuario FROM auditoria_logs WHERE accion IN ('ASISTENCIA_CONFIRMADA', 'ASISTENCIA_RECHAZADA') ORDER BY id"
     );
@@ -208,7 +207,7 @@ describe('PATCH /api/notificaciones/:id/donacion', () => {
   });
 });
 
-describe('GET /api/auditoria/notificacion/:id (RF-11)', () => {
+describe('GET /api/auditoria/notificacion/:id', () => {
   it('el hospital dueno verifica el historial del donante notificado sin conocer su hash', async () => {
     const donada = await notificacionDe(donanteSur.id_donante);
     const res = await request(app).get(`/api/auditoria/notificacion/${donada.id}`).set(bearer(tokenHospital1));

@@ -1,6 +1,6 @@
 # Dependencias
 node_modules/
-package-lock.json
+# package-lock.json se versiona: Render y Vercel lo usan para instalar versiones exactas
 
 # Variables de entorno 
 .env

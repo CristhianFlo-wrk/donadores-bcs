@@ -6,6 +6,16 @@ import { registrarLog } from '../auditoria/auditoria.service.js';
 const URGENCIAS = ['critica', 'urgente'];
 const ESTADOS = ['activa', 'completada', 'cancelada'];
 const ESTADOS_CIERRE = ['completada', 'cancelada'];
+const UNIDADES_MAXIMAS = 20;
+
+function parsearUnidades(valor) {
+  if (valor === undefined || valor === null) return 1;
+  const unidades = Number(valor);
+  if (!Number.isInteger(unidades) || unidades < 1 || unidades > UNIDADES_MAXIMAS) {
+    throw errorValidacion('unidades_requeridas debe ser un entero entre 1 y ' + UNIDADES_MAXIMAS);
+  }
+  return unidades;
+}
 
 // Admin accede a cualquier hospital; un usuario hospital solo al suyo
 export function verificarAccesoHospital(usuario, idHospital) {
@@ -26,6 +36,7 @@ export async function crearSolicitud(idHospital, datos, contexto = {}) {
   }
 
   parsearId(idTipoSangre, 'id_tipo_sangre');
+  const unidadesRequeridas = parsearUnidades(datos.unidades_requeridas);
 
   const hospital = await query('SELECT id FROM hospitales WHERE id = $1 AND activo = TRUE', [idHospital]);
   if (hospital.rows.length === 0) {
@@ -39,15 +50,21 @@ export async function crearSolicitud(idHospital, datos, contexto = {}) {
 
   const idSolicitud = await transaccion(async (client) => {
     const { rows } = await client.query(`
-      INSERT INTO solicitudes (id_hospital, id_tipo_sangre, urgencia, descripcion, estado)
-      VALUES ($1, $2, $3, $4, 'activa')
+      INSERT INTO solicitudes (id_hospital, id_tipo_sangre, urgencia, unidades_requeridas, descripcion, estado)
+      VALUES ($1, $2, $3, $4, $5, 'activa')
       RETURNING id
-    `, [idHospital, idTipoSangre, urgencia, descripcion ? String(descripcion).trim() : null]);
+    `, [idHospital, idTipoSangre, urgencia, unidadesRequeridas, descripcion ? String(descripcion).trim() : null]);
 
     await registrarLog(client, {
       idUsuario: contexto.idUsuario,
       accion: 'SOLICITUD_CREADA',
-      detalles: { id_solicitud: rows[0].id, id_hospital: idHospital, id_tipo_sangre: Number(idTipoSangre), urgencia },
+      detalles: {
+        id_solicitud: rows[0].id,
+        id_hospital: idHospital,
+        id_tipo_sangre: Number(idTipoSangre),
+        urgencia,
+        unidades_requeridas: unidadesRequeridas
+      },
       ipOrigen: contexto.ip
     });
 
@@ -102,6 +119,7 @@ export async function obtenerSolicitudPorId(idSolicitud, { incluirNotificaciones
     tipo_sangre: solicitud.tipo_sangre,
     urgencia: solicitud.urgencia,
     estado: solicitud.estado,
+    unidades_requeridas: solicitud.unidades_requeridas,
     descripcion: solicitud.descripcion,
     fecha_solicitud: solicitud.fecha_solicitud,
     fecha_cierre: solicitud.fecha_cierre,
@@ -131,6 +149,8 @@ export async function listarSolicitudes(filtros = {}) {
   const valores = [];
   let sql = `
     SELECT s.id, s.urgencia, s.estado, s.fecha_solicitud, s.id_hospital,
+           s.unidades_requeridas,
+           (SELECT COUNT(*) FROM notificaciones n WHERE n.id_solicitud = s.id AND n.estado = 'donada') AS unidades_donadas,
            h.nombre AS hospital_nombre,
            h.region AS region,
            ts.codigo AS tipo_sangre

@@ -100,6 +100,7 @@ CREATE TABLE solicitudes (
     id_tipo_sangre INTEGER NOT NULL REFERENCES tipos_sangre(id),
     urgencia VARCHAR(20) CHECK (urgencia IN ('critica', 'urgente')) NOT NULL,
     estado VARCHAR(20) CHECK (estado IN ('activa', 'completada', 'cancelada')) DEFAULT 'activa',
+    unidades_requeridas INTEGER NOT NULL DEFAULT 1 CHECK (unidades_requeridas BETWEEN 1 AND 20),
     descripcion TEXT,
     fecha_solicitud TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     fecha_cierre TIMESTAMPTZ

@@ -125,6 +125,18 @@ Para comprobar que el backend está funcionando, abre la siguiente dirección en
 
 Si todo está configurado correctamente, la respuesta debe incluir `ok: true`.
 
+### 5. Iniciar el frontend
+
+Con el backend encendido, abre otra terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+La aplicación queda en [http://localhost:5173](http://localhost:5173). En desarrollo, Vite redirige las peticiones `/api` al backend en el puerto 3000, así que no hace falta configurar variables. La misma aplicación se adapta al rol de quien inicia sesión: vista móvil para donantes y panel web para hospitales y administradores. La guía visual está en `frontendContext/frontContext.md`.
+
 ## Usuarios de prueba
 
 Al inicializar la base de datos se crea una cuenta de administrador y una cuenta para cada uno de los ocho hospitales de prueba.
@@ -279,7 +291,7 @@ Los permisos de cada endpoint se aplican según el rol del usuario autenticado.
 
 - **`GET /api/solicitudes`:** permite consultar las solicitudes disponibles. Los donantes solo pueden ver las activas.
 - **`GET /api/solicitudes/:id`:** permite consultar una solicitud específica.
-- **`POST /api/solicitudes`:** permite a hospitales y administradores crear solicitudes de donación.
+- **`POST /api/solicitudes`:** permite a hospitales y administradores crear solicitudes de donación. Campos: `id_tipo_sangre`, `urgencia` (`urgente` o `critica`), `unidades_requeridas` (opcional, entero de 1 a 20, por defecto 1) y `descripcion` (opcional). El detalle y el listado devuelven `unidades_requeridas`; el listado agrega `unidades_donadas`.
 - **`GET /api/solicitudes/:id/candidatos`:** permite al hospital dueño y al administrador consultar los posibles donantes de una solicitud.
 - **`PATCH /api/solicitudes/:id/cerrar`:** permite al hospital dueño y al administrador cerrar una solicitud.
 - **`POST /api/notificaciones/notificar`:** permite al hospital dueño y al administrador enviar notificaciones a los donantes seleccionados.
@@ -323,25 +335,50 @@ Entre los casos que se prueban se encuentran:
 
 También se incluye una prueba de rendimiento con 150 donantes, cuyo objetivo es comprobar que la búsqueda de personas compatibles se complete en menos de tres segundos.
 
-## Despliegue del backend en Render
+Las pruebas también se ejecutan solas en GitHub Actions (`.github/workflows/tests.yml`) en cada push o pull request que modifique la carpeta `backend`, con una base PostgreSQL 16 temporal. El resultado aparece como una marca verde o roja junto a cada commit.
 
-El backend puede desplegarse en Render junto con una base de datos PostgreSQL. El frontend está previsto para desplegarse por separado en Vercel.
+## Pruebas manuales con Postman
 
-### 1. Crear los servicios
+En `docs/postman/donadores-bcs.postman_collection.json` hay una colección con el flujo completo: catálogos, inicio de sesión de cada rol, registro del donante, creación de una solicitud, notificación, confirmación, registro de la donación, verificación del historial, administración y algunos casos de error esperados.
 
-En Render, crea una base de datos PostgreSQL y un servicio web para el backend.
+Para usarla:
+
+1. Importa el archivo en Postman.
+2. Con el servidor encendido, abre la colección y usa **Run collection** para ejecutar las carpetas en orden. Los tokens y los ids se guardan solos en las variables de la colección.
+3. Para probar el despliegue, cambia la variable `baseUrl` por la URL de Render y las credenciales por las de producción.
+
+También se puede correr desde la terminal con newman:
+
+```bash
+npx newman run docs/postman/donadores-bcs.postman_collection.json
+```
+
+El flujo completo funciona una vez por donante cada 90 días, porque después de registrar la donación el donante deja de ser compatible. Para repetirlo en desarrollo, ejecuta `npm run init-db` o cambia la variable `donanteEmail` y la CURP del registro.
+
+## Despliegue
+
+Todo se despliega en planes gratuitos: el backend en Render, la base de datos PostgreSQL en Neon y el frontend en Vercel. Se usa Neon porque la base gratuita de Render caduca a los 30 días.
+
+### 1. Crear la base de datos en Neon
+
+Crea un proyecto en [Neon](https://neon.com) en la región **AWS us-west-2 (Oregon)** y copia la cadena de conexión (incluye `sslmode=require`). Será la `DATABASE_URL`.
+
+### 2. Crear el servicio web en Render
+
+En Render, crea un **Web Service** gratuito en la región Oregon, conectado al repositorio.
 
 Configura la carpeta `backend` como directorio de trabajo y utiliza los siguientes comandos:
 
-- **Build Command:** `npm install`
+- **Build Command:** `npm ci`
+- **Health Check Path:** `/api/health`
 - **Start Command:** `npm start`
 
-### 2. Configurar las variables de entorno
+### 3. Configurar las variables de entorno
 
 En la configuración del servicio agrega las siguientes variables:
 
 - **`NODE_ENV`:** establece el valor `production`.
-- **`DATABASE_URL`:** utiliza la URL interna de la base de datos PostgreSQL.
+- **`DATABASE_URL`:** la cadena de conexión de Neon.
 - **`AES_KEY`:** configura una clave nueva y segura.
 - **`HASH_KEY`:** configura otra clave nueva y segura.
 - **`JWT_SECRET`:** utiliza un secreto seguro de al menos 32 caracteres.
@@ -349,37 +386,50 @@ En la configuración del servicio agrega las siguientes variables:
 
 No reutilices las claves de desarrollo ni publiques los secretos en el repositorio.
 
-### 3. Preparar la base de datos
+### 4. Preparar la base de datos
 
-Desde la Shell del servicio en Render, ejecuta:
+Este paso se hace desde tu computadora con la cadena de conexión de Neon. En PowerShell, dentro de la carpeta `backend`:
 
-```bash
+```powershell
+$env:NODE_ENV="production"; $env:DATABASE_URL="<cadena de conexion de Neon>"
 npm run init-db:prod
 ```
 
 Este comando crea las tablas que falten y carga los catálogos sin eliminar los datos existentes.
 
-### 4. Crear la cuenta de administrador
+### 5. Crear la cuenta de administrador
 
-Configura las variables `ADMIN_EMAIL` y `ADMIN_PASSWORD` en el entorno del servicio y ejecuta:
+En la misma terminal, define el correo y la contraseña del administrador y ejecuta:
 
-```bash
+```powershell
+$env:ADMIN_EMAIL="<correo>"; $env:ADMIN_PASSWORD="<contraseña segura>"
 npm run crear-admin
 ```
 
-Utiliza una dirección de correo válida y una contraseña segura.
+Utiliza una dirección de correo válida y una contraseña segura. Al terminar cierra esa terminal para que las variables no se queden en la sesión.
 
-### 5. Crear las cuentas de los hospitales
+### 6. Desplegar el frontend en Vercel
 
-Una vez creada la cuenta de administrador, inicia sesión y utiliza el endpoint `POST /api/auth/usuarios` para registrar las cuentas correspondientes a cada hospital.
+Importa el repositorio en Vercel con estos ajustes:
 
-Con esto, el backend estará preparado para gestionar usuarios, solicitudes y donaciones desde el entorno de producción.
+- **Root Directory:** `frontend` (Vercel detecta Vite y usa `npm run build`).
+- **Variable `VITE_API_URL`:** la URL del servicio de Render, sin `/api` al final.
+
+El archivo `frontend/vercel.json` redirige todas las rutas a `index.html` para que funcionen las recargas de página. Al terminar, copia el dominio de Vercel en la variable `CORS_ORIGIN` de Render.
+
+### 7. Crear las cuentas de los hospitales
+
+Inicia sesión como administrador en el frontend y crea las cuentas de cada hospital en **Usuarios**.
+
+### 8. Evitar el arranque en frío
+
+El servicio gratuito de Render se duerme tras 15 minutos sin tráfico y tarda cerca de un minuto en despertar. Para la demostración, programa un ping a `https://<servicio>.onrender.com/api/health` cada 10 minutos (por ejemplo con cron-job.org).
 
 ## Estado actual del proyecto
 
 Donadores BCS reúne las funciones necesarias para organizar el registro de donantes, gestionar solicitudes de sangre y mantener un historial de donaciones con mecanismos de verificación de integridad.
 
-Actualmente, el backend cuenta con endpoints para la autenticación, los donantes, las solicitudes, las notificaciones, la auditoría y los reportes. El frontend se encuentra en desarrollo y las notificaciones push y SMS todavía se simulan en consola.
+El backend cuenta con endpoints para la autenticación, los donantes, las solicitudes, las notificaciones, la auditoría y los reportes. El frontend cubre los flujos de los tres roles y es instalable como PWA: se agrega a la pantalla de inicio del celular y la interfaz abre sin conexión (los datos siempre se piden al servidor). Las notificaciones push y SMS todavía se simulan en consola.
 
 La integración con Firebase y el desarrollo del frontend forman parte de los siguientes pasos para ampliar las funcionalidades del sistema.
 

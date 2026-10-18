@@ -57,6 +57,7 @@ describe('POST /api/solicitudes', () => {
     assert.equal((await crear(tokenHospital1, { id_tipo_sangre: 'x', urgencia: 'urgente' })).status, 400);
     assert.equal((await crear(tokenAdmin, { id_hospital: 999, id_tipo_sangre: 2, urgencia: 'urgente' })).status, 400);
   });
+
 });
 
 describe('GET /api/solicitudes', () => {
@@ -161,3 +162,22 @@ describe('PATCH /api/solicitudes/:id/cerrar', () => {
     assert.ok(['completada', 'cancelada'].includes(rows[0].estado));
   });
 });
+
+describe('Unidades requeridas', () => {
+  it('unidades_requeridas es opcional (1 por defecto), entero de 1 a 20, y se refleja en el listado', async () => {
+    const porDefecto = await crear(tokenHospital1, { id_tipo_sangre: 2, urgencia: 'urgente' });
+    assert.equal(porDefecto.body.solicitud.unidades_requeridas, 1);
+
+    const conUnidades = await crear(tokenHospital1, { id_tipo_sangre: 2, urgencia: 'urgente', unidades_requeridas: 5 });
+    assert.equal(conUnidades.status, 201);
+    assert.equal(conUnidades.body.solicitud.unidades_requeridas, 5);
+
+    for (const invalida of [0, 21, 2.5, 'tres']) {
+      assert.equal((await crear(tokenHospital1, { id_tipo_sangre: 2, urgencia: 'urgente', unidades_requeridas: invalida })).status, 400);
+    }
+
+    const lista = await request(app).get('/api/solicitudes?id_hospital=1').set(bearer(tokenHospital1));
+    const fila = lista.body.solicitudes.find((s) => s.id === conUnidades.body.solicitud.id);
+    assert.equal(fila.unidades_requeridas, 5);
+    assert.equal(fila.unidades_donadas, 0);
+  });});

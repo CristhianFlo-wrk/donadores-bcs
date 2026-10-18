@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS solicitudes (
     id_tipo_sangre INTEGER NOT NULL REFERENCES tipos_sangre(id),
     urgencia VARCHAR(20) CHECK (urgencia IN ('critica', 'urgente')) NOT NULL,
     estado VARCHAR(20) CHECK (estado IN ('activa', 'completada', 'cancelada')) DEFAULT 'activa',
+    unidades_requeridas INTEGER NOT NULL DEFAULT 1 CHECK (unidades_requeridas BETWEEN 1 AND 20),
     descripcion TEXT,
     fecha_solicitud TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     fecha_cierre TIMESTAMPTZ
@@ -136,5 +137,7 @@ CREATE INDEX IF NOT EXISTS idx_historial_donante ON historial_donaciones(id_dona
 CREATE INDEX IF NOT EXISTS idx_historial_region ON historial_donaciones(region);
 CREATE INDEX IF NOT EXISTS idx_historial_hash ON historial_donaciones(hash_actual);
 CREATE INDEX IF NOT EXISTS idx_solicitudes_estado ON solicitudes(estado);
+
+ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS unidades_requeridas INTEGER NOT NULL DEFAULT 1 CHECK (unidades_requeridas BETWEEN 1 AND 20);
 CREATE INDEX IF NOT EXISTS idx_auditoria_fecha ON auditoria_logs(fecha);
 CREATE INDEX IF NOT EXISTS idx_auditoria_usuario ON auditoria_logs(id_usuario);

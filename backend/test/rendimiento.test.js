@@ -32,7 +32,7 @@ before(async () => {
 });
 after(cerrarPool);
 
-describe('rendimiento con carga de donantes (RNF-02)', () => {
+describe('rendimiento con carga de donantes', () => {
   it('hay al menos 100 donantes cargados', async () => {
     assert.ok(await contarFilas('donantes') >= 100);
   });

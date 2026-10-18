@@ -2,6 +2,9 @@
   "name": "donadores-bcs-backend",
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",

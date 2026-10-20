@@ -1,0 +1,56 @@
+name: Tests backend
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/tests.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/tests.yml'
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: donadores
+          POSTGRES_PASSWORD: donadores123
+          POSTGRES_DB: donadores_bcs
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U donadores"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    # Llaves solo de prueba, iguales a backend/.env.example. Nunca usar en produccion
+    env:
+      DATABASE_URL: postgresql://donadores:donadores123@localhost:5432/donadores_bcs
+      AES_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      HASH_KEY: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+      JWT_SECRET: secreto_de_pruebas_para_ci_de_github_actions
+      JWT_EXPIRES_IN: 8h
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - run: npm test

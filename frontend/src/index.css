@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter Variable", system-ui, sans-serif;
+}
+
+@theme inline {
+  --color-acento-50: var(--acento-50);
+  --color-acento-100: var(--acento-100);
+  --color-acento-200: var(--acento-200);
+  --color-acento-600: var(--acento-600);
+  --color-acento-700: var(--acento-700);
+  --color-acento-800: var(--acento-800);
+  --color-fondo: var(--fondo);
+}
+
+@layer base {
+  :root,
+  .tono-rojo {
+    --acento-50: var(--color-red-50);
+    --acento-100: var(--color-red-100);
+    --acento-200: var(--color-red-200);
+    --acento-600: var(--color-red-600);
+    --acento-700: var(--color-red-700);
+    --acento-800: var(--color-red-800);
+    --fondo: color-mix(in oklab, var(--color-red-50) 40%, white);
+  }
+
+  .tono-azul {
+    --acento-50: var(--color-blue-50);
+    --acento-100: var(--color-blue-100);
+    --acento-200: var(--color-blue-200);
+    --acento-600: var(--color-blue-600);
+    --acento-700: var(--color-blue-700);
+    --acento-800: var(--color-blue-800);
+    --fondo: color-mix(in oklab, var(--color-blue-50) 40%, white);
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-800 antialiased;
+  }
+}

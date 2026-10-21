@@ -2,6 +2,25 @@
 
 @theme {
   --font-sans: "Inter Variable", system-ui, sans-serif;
+  --font-display: "Atkinson Hyperlegible Next", "Inter Variable", system-ui, sans-serif;
+
+  --ease-salida: cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-llenar: llenar 700ms var(--ease-salida) both;
+
+  --animate-aparecer: aparecer 500ms var(--ease-salida) both;
+
+  @keyframes llenar {
+    from {
+      transform: scaleX(0);
+    }
+  }
+
+  @keyframes aparecer {
+    from {
+      opacity: 0.4;
+      transform: translateY(6px) scale(0.98);
+    }
+  }
 }
 
 @theme inline {

@@ -1,18 +1,18 @@
 import { Link } from 'react-router';
 import { ArrowLeft, LoaderCircle } from 'lucide-react';
 
-// Componentes visuales base. "acento" es el color del rol activo (rojo donante, azul panel),
-// definido en index.css; ver frontendContext/frontContext.md
 
 const VARIANTES_BOTON = {
-  primario: 'bg-acento-600 text-white hover:bg-acento-700',
-  suave: 'bg-acento-50 text-acento-700 hover:bg-acento-100',
-  neutro: 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-  contorno: 'bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50',
-  peligro: 'bg-white text-red-700 ring-1 ring-inset ring-red-200 hover:bg-red-50'
+  primario: 'bg-acento-600 text-white hover:bg-acento-700 focus-visible:outline-acento-600',
+  suave: 'bg-acento-50 text-acento-700 hover:bg-acento-100 focus-visible:outline-acento-600',
+  neutro: 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus-visible:outline-acento-600',
+  contorno: 'bg-white text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus-visible:outline-acento-600',
+  peligro: 'bg-white text-red-700 ring-1 ring-inset ring-red-200 hover:bg-red-50 focus-visible:outline-acento-600',
+  // Solo sobre el bloque protagonista (fondo de acento pleno)
+  blanco: 'bg-white text-acento-700 hover:bg-acento-50 focus-visible:outline-white'
 };
 
-export const CLASES_BOTON = 'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento-600 disabled:cursor-not-allowed disabled:opacity-60 ';
+export const CLASES_BOTON = 'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ';
 
 export function clasesBoton(variante = 'primario') {
   return CLASES_BOTON + VARIANTES_BOTON[variante];
@@ -61,7 +61,21 @@ export function Panel({ titulo, detalle, accion, className = '', cuerpo = 'p-5',
   );
 }
 
-// Titulo de cada pantalla: un h1 de 24px, una linea opcional y las acciones a la derecha
+// Lo mas urgente de la pantalla en acento pleno. Uno por pantalla y solo cuando hay algo que atender
+export function BloqueProtagonista({ id, titulo, meta, accion, className = '', children }) {
+  return (
+    <section aria-labelledby={id} className={'flex flex-col gap-4 rounded-xl bg-acento-600 p-5 text-white sm:flex-row sm:items-center md:p-6 ' + className}>
+      <div className="min-w-0 flex-1">
+        {meta && <p className="text-sm font-medium">{meta}</p>}
+        <h2 id={id} className="mt-1 font-display text-2xl font-bold leading-tight text-balance md:text-[1.75rem]">{titulo}</h2>
+        {children && <div className="mt-1.5 text-sm">{children}</div>}
+      </div>
+      {accion && <div className="flex shrink-0 flex-col gap-2 sm:flex-row">{accion}</div>}
+    </section>
+  );
+}
+
+// Titulo de cada pantalla: un h1 en fuente display, una linea opcional y las acciones a la derecha
 export function EncabezadoPagina({ titulo, descripcion, acciones, volver, antes }) {
   return (
     <div className="mb-6">
@@ -75,7 +89,7 @@ export function EncabezadoPagina({ titulo, descripcion, acciones, volver, antes 
         <div className="flex min-w-0 items-center gap-4">
           {antes}
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900">{titulo}</h1>
+            <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight text-gray-900 text-balance md:text-3xl">{titulo}</h1>
             {descripcion && <div className="mt-1 text-sm text-gray-600">{descripcion}</div>}
           </div>
         </div>
@@ -125,8 +139,8 @@ export function FichaSangre({ tipo, tamano = 'md', className = '' }) {
 }
 
 // Varias cifras del mismo nivel en un solo contenedor dividido
-export function TiraMetricas({ metricas, className = '' }) {
-  const columnas = { 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3', 4: 'sm:grid-cols-2 lg:grid-cols-4', 5: 'sm:grid-cols-3 lg:grid-cols-5' }[metricas.length] || 'sm:grid-cols-3';
+export function TiraMetricas({ metricas, columnas: columnasFijas, className = '' }) {
+  const columnas = columnasFijas || { 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3', 4: 'sm:grid-cols-2 lg:grid-cols-4', 5: 'sm:grid-cols-3 lg:grid-cols-5' }[metricas.length] || 'sm:grid-cols-3';
   return (
     <dl className={'grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-200 ' + columnas + ' ' + className}>
       {metricas.map((m, indice) => (
@@ -135,7 +149,7 @@ export function TiraMetricas({ metricas, className = '' }) {
           className={'bg-white px-5 py-4 ' + (metricas.length % 2 === 1 && indice === metricas.length - 1 ? 'col-span-2 sm:col-span-1' : '')}
         >
           <dt className="text-sm text-gray-600">{m.etiqueta}</dt>
-          <dd className={'mt-1 text-2xl font-semibold tabular-nums ' + (m.color || 'text-gray-900')}>{m.valor}</dd>
+          <dd className={'mt-1 font-display font-bold tabular-nums ' + (String(m.valor).length <= 8 ? 'text-3xl ' : 'text-xl leading-snug ') + (m.color || 'text-gray-900')}>{m.valor}</dd>
           {m.detalle && <dd className="mt-0.5 text-xs text-gray-500">{m.detalle}</dd>}
         </div>
       ))}
@@ -155,7 +169,10 @@ export function BarraProgreso({ valor, maximo, etiqueta, className = '' }) {
       aria-valuemax={maximo}
       aria-valuenow={valor}
     >
-      <div className={'h-full rounded-full ' + (completa ? 'bg-emerald-600' : 'bg-acento-600')} style={{ width: porcentaje + '%' }} />
+      <div
+        className={'h-full origin-left animate-llenar rounded-full transition-[width] duration-700 ease-salida motion-reduce:animate-none motion-reduce:transition-none ' + (completa ? 'bg-emerald-600' : 'bg-acento-600')}
+        style={{ width: porcentaje + '%' }}
+      />
     </div>
   );
 }

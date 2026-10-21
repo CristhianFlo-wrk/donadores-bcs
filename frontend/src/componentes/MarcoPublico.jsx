@@ -28,7 +28,7 @@ export default function MarcoPublico({ titulo, subtitulo, ancho = 'max-w-sm', ch
         <div className="sticky top-0 flex h-dvh flex-col justify-between p-12">
           <Logo claro />
           <div>
-            <h2 className="max-w-md text-4xl font-bold leading-tight tracking-tight">
+            <h2 className="max-w-md font-display text-4xl font-bold leading-tight tracking-tight text-balance">
               Conectamos a hospitales con donantes compatibles en Baja California Sur
             </h2>
             <ul className="mt-8 space-y-4">

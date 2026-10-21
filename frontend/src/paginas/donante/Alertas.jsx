@@ -39,7 +39,7 @@ export default function Alertas() {
                 {abiertas.length === 0 ? (
                   <Vacio titulo="Ninguna solicitud abierta">Las alertas nuevas aparecerán aquí.</Vacio>
                 ) : (
-                  <ul className="grid gap-4 lg:grid-cols-2 lg:items-start">
+                  <ul className="grid gap-4 md:grid-cols-2 md:items-start xl:grid-cols-1 2xl:grid-cols-2">
                     {abiertas.map((n) => (
                       <li key={n.id}><TarjetaAlerta notificacion={n} alResponder={alResponder} /></li>
                     ))}
@@ -54,7 +54,7 @@ export default function Alertas() {
                         <li key={n.id} className="flex items-center gap-4 px-5 py-3.5">
                           <FichaSangre tipo={n.tipo_sangre} tamano="sm" />
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold text-gray-900">{n.hospital_nombre}</p>
+                            <p className="text-sm font-semibold text-gray-900">{n.hospital_nombre}</p>
                             <p className="text-xs text-gray-600">{hace(n.fecha_envio)}</p>
                           </div>
                           {n.estado === 'donada' ? <BadgeEstadoNotificacion estado="donada" /> : <Badge tono="gris">Solicitud cerrada</Badge>}
@@ -116,27 +116,27 @@ function TarjetaAlerta({ notificacion: n, alResponder }) {
         </div>
       </div>
 
+      {n.estado === 'confirmada' && (
+        <div className="mt-4 animate-aparecer rounded-lg bg-acento-600 p-4 text-white motion-reduce:animate-none sm:p-5">
+          <p className="text-sm font-medium">Código de asistencia</p>
+          <p className="mt-1 font-mono text-4xl font-bold tracking-wide">{codigoAsistencia(n.id)}</p>
+          <p className="mt-2 text-sm">
+            Muéstralo en el hospital junto con una identificación oficial. Puedes cambiar tu respuesta mientras no se registre la donación.
+          </p>
+        </div>
+      )}
       {(n.estado === 'enviada' || n.estado === 'confirmada' || n.estado === 'rechazada') && (
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
           {n.estado !== 'confirmada' && (
-            <Boton cargando={enviando === 'confirmada'} disabled={Boolean(enviando)} onClick={() => responder('confirmada')} className="flex-1">
+            <Boton cargando={enviando === 'confirmada'} disabled={Boolean(enviando)} onClick={() => responder('confirmada')} className="min-w-36 flex-1 py-3">
               Asistiré
             </Boton>
           )}
           {n.estado !== 'rechazada' && (
-            <Boton variante="neutro" cargando={enviando === 'rechazada'} disabled={Boolean(enviando)} onClick={() => responder('rechazada')} className="flex-1">
+            <Boton variante="neutro" cargando={enviando === 'rechazada'} disabled={Boolean(enviando)} onClick={() => responder('rechazada')} className="min-w-36 flex-1 py-3">
               No puedo asistir
             </Boton>
           )}
-        </div>
-      )}
-      {n.estado === 'confirmada' && (
-        <div className="mt-4 rounded-lg bg-emerald-50 p-4">
-          <p className="text-xs font-medium text-emerald-800">Código de asistencia</p>
-          <p className="mt-0.5 font-mono text-2xl font-bold tracking-wide text-emerald-900">{codigoAsistencia(n.id)}</p>
-          <p className="mt-1 text-xs text-emerald-800">
-            Muéstralo en el hospital junto con una identificación oficial. Puedes cambiar tu respuesta mientras no se registre la donación.
-          </p>
         </div>
       )}
       <Aviso className="mt-3">{error}</Aviso>

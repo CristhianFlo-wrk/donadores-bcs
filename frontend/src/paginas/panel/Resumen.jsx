@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Plus } from 'lucide-react';
-import { hospitales, reportes, solicitudes } from '../../api/servicios.js';
+import { hospitales, notificaciones, reportes, solicitudes } from '../../api/servicios.js';
 import { useConsulta } from '../../hooks/useConsulta.js';
 import { useSesion } from '../../contexto/SesionContext.jsx';
-import { BarraProgreso, Cargando, EncabezadoPagina, EnlaceBoton, EstadoConsulta, FichaSangre, Panel, TiraMetricas, Vacio } from '../../componentes/ui.jsx';
+import { Aviso, BarraProgreso, BloqueProtagonista, Boton, Cargando, EncabezadoPagina, EnlaceBoton, EstadoConsulta, FichaSangre, Panel, Punto, TiraMetricas, Vacio } from '../../componentes/ui.jsx';
 import { BadgeUrgencia } from '../../componentes/insignias.jsx';
-import { fechaHora, hace } from '../../utils/formato.js';
+import { codigoAsistencia, fechaHora, hace } from '../../utils/formato.js';
 
 const MAXIMO_ACTIVAS = 6;
 
@@ -55,27 +55,33 @@ export default function Resumen() {
         }
       />
 
+      {!esAdmin && !consultaActivas.cargando && (
+        <EnCamino activas={consultaActivas.datos?.solicitudes || []} base={base} alRegistrar={() => { consultaActivas.recargar(); consulta.recargar(); }} />
+      )}
+
       <EstadoConsulta consulta={consulta}>
         {({ dashboard }) => (
           <>
-            <TiraMetricas
-              className="mb-6"
-              metricas={[
-                { etiqueta: 'Solicitudes activas', valor: dashboard.solicitudes.activas },
-                { etiqueta: 'Críticas activas', valor: dashboard.solicitudes.criticas_activas, color: dashboard.solicitudes.criticas_activas > 0 ? 'text-red-700' : undefined },
-                { etiqueta: 'Donaciones registradas', valor: dashboard.donaciones_registradas },
-                { etiqueta: 'Donantes aptos hoy', valor: dashboard.donantes.aptos, detalle: 'de ' + dashboard.donantes.total + ' registrados en el estado' }
-              ]}
-            />
-
-            <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_384px]">
+            <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
               <div className="min-w-0 space-y-6">
                 <SolicitudesActivas consulta={consultaActivas} base={base} esAdmin={esAdmin} />
                 <SolicitudesAtendidas lista={dashboard.solicitudes_atendidas} base={base} esAdmin={esAdmin} />
               </div>
 
               <div className="space-y-6">
-                <DonantesPorTipo grupos={dashboard.donantes.por_grupo_sanguineo} />
+                <TiraMetricas
+                  columnas="sm:grid-cols-4 xl:grid-cols-2"
+                  metricas={[
+                    { etiqueta: 'Solicitudes activas', valor: dashboard.solicitudes.activas },
+                    { etiqueta: 'Críticas activas', valor: dashboard.solicitudes.criticas_activas, color: dashboard.solicitudes.criticas_activas > 0 ? 'text-red-700' : undefined },
+                    { etiqueta: 'Donaciones registradas', valor: dashboard.donaciones_registradas },
+                    { etiqueta: 'Donantes aptos hoy', valor: dashboard.donantes.aptos, detalle: 'de ' + dashboard.donantes.total + ' registrados en el estado' }
+                  ]}
+                />
+                <DonantesPorTipo
+                  grupos={dashboard.donantes.por_grupo_sanguineo}
+                  solicitados={new Set((consultaActivas.datos?.solicitudes || []).map((s) => s.tipo_sangre))}
+                />
                 <Panel titulo="Donantes por región" cuerpo="">
                   <dl className="grid grid-cols-3 divide-x divide-gray-100">
                     {['norte', 'centro', 'sur'].map((region) => (
@@ -111,9 +117,99 @@ export default function Resumen() {
   );
 }
 
+// "abierta hace 3 horas" o, despues de una semana, "abierta el 14 oct"
+function abierta(valor) {
+  const texto = hace(valor);
+  return texto.startsWith('Hace') ? 'Abierta ' + texto.toLowerCase() : 'Abierta el ' + texto;
+}
+
+// Criticas primero y, dentro de cada prioridad, la que lleva mas tiempo abierta
+function ordenarPorUrgencia(lista) {
+  return [...lista].sort((a, b) =>
+    Number(b.urgencia === 'critica') - Number(a.urgencia === 'critica') ||
+    new Date(a.fecha_solicitud) - new Date(b.fecha_solicitud)
+  );
+}
+
+// Donantes que confirmaron asistencia en cualquier solicitud activa del hospital; registrar aqui es la misma accion que en el detalle
+function EnCamino({ activas, base, alRegistrar }) {
+  const ids = activas.map((s) => s.id).join(',');
+  const consulta = useConsulta(() => Promise.all(activas.map((s) => solicitudes.obtener(s.id))), [ids], { intervaloMs: 15000 });
+  const [aviso, setAviso] = useState(null);
+
+  if (activas.length === 0 || !consulta.datos) return null;
+
+  const llegadas = consulta.datos
+    .flatMap(({ solicitud }) => (solicitud.notificaciones || []).filter((n) => n.estado === 'confirmada').map((n) => ({ ...n, solicitud })))
+    .sort((a, b) => new Date(a.fecha_respuesta) - new Date(b.fecha_respuesta));
+
+  async function alTerminar(nuevoAviso) {
+    setAviso(nuevoAviso);
+    await consulta.recargar();
+    if (nuevoAviso.tono === 'exito') alRegistrar();
+  }
+
+  return (
+    <div className="mb-6 space-y-3">
+      {aviso && <Aviso tono={aviso.tono}>{aviso.texto}</Aviso>}
+      {llegadas.length === 0 ? (
+        <p className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 text-sm text-gray-700">
+          <Punto color="bg-gray-300" />
+          Ningún donante ha confirmado asistencia todavía. Las confirmaciones aparecen aquí en cuanto llegan.
+        </p>
+      ) : (
+        <BloqueProtagonista
+          id="titulo-camino"
+          meta={llegadas.length + (llegadas.length === 1 ? ' donante confirmó asistencia' : ' donantes confirmaron asistencia')}
+          titulo="Vienen en camino"
+        >
+          <p>Pide el código de asistencia en recepción y registra la donación cuando se realice.</p>
+          <ul className="mt-4 grid gap-2 2xl:grid-cols-2">
+            {llegadas.map((n) => <FilaEnCamino key={n.id} notificacion={n} base={base} alTerminar={alTerminar} />)}
+          </ul>
+        </BloqueProtagonista>
+      )}
+    </div>
+  );
+}
+
+function FilaEnCamino({ notificacion: n, base, alTerminar }) {
+  const [registrando, setRegistrando] = useState(false);
+
+  async function registrar() {
+    setRegistrando(true);
+    try {
+      await notificaciones.registrarDonacion(n.id);
+      await alTerminar({ tono: 'exito', texto: 'Donación ' + codigoAsistencia(n.id) + ' registrada en el historial del donante.' });
+    } catch (e) {
+      await alTerminar({ tono: 'error', texto: e.message });
+    } finally {
+      setRegistrando(false);
+    }
+  }
+
+  return (
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg bg-acento-700 px-4 py-3">
+      <span className="font-mono text-2xl font-bold tracking-wide">{codigoAsistencia(n.id)}</span>
+      <span className="min-w-40 flex-1 text-sm">
+        <span className="block font-semibold">
+          Sangre {n.solicitud.tipo_sangre} · {n.solicitud.urgencia === 'critica' ? 'Crítica' : 'Urgente'}
+        </span>
+        <span className="block">
+          Confirmó {hace(n.fecha_respuesta).toLowerCase()} ·{' '}
+          <Link to={base + '/solicitudes/' + n.solicitud.id} className="rounded underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+            Solicitud #{n.solicitud.id}
+          </Link>
+        </span>
+      </span>
+      <Boton variante="blanco" cargando={registrando} onClick={registrar} className="w-full sm:w-auto">Registrar donación</Boton>
+    </li>
+  );
+}
+
 // Lo que el hospital esta atendiendo ahora: unidades obtenidas contra las requeridas
 function SolicitudesActivas({ consulta, base, esAdmin }) {
-  const lista = consulta.datos?.solicitudes || [];
+  const lista = ordenarPorUrgencia(consulta.datos?.solicitudes || []);
   const visibles = lista.slice(0, MAXIMO_ACTIVAS);
 
   return (
@@ -130,25 +226,26 @@ function SolicitudesActivas({ consulta, base, esAdmin }) {
       ) : visibles.length === 0 ? (
         <Vacio titulo="No hay solicitudes activas" className="m-5">Las solicitudes nuevas aparecerán aquí con su avance.</Vacio>
       ) : (
-        <ul className="divide-y divide-gray-100">
+        <ul className="@container divide-y divide-gray-100">
           {visibles.map((s) => {
             const completa = s.unidades_donadas >= s.unidades_requeridas;
             return (
               <li key={s.id}>
                 <Link
                   to={base + '/solicitudes/' + s.id}
-                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-5 py-4 transition-colors hover:bg-gray-50 md:grid-cols-[auto_minmax(0,1fr)_6rem_minmax(8rem,14rem)_8rem]"
+                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 px-5 py-4 transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-acento-600 @3xl:grid-cols-[auto_minmax(0,1fr)_6rem_minmax(8rem,16rem)_7.5rem]"
                 >
-                  <FichaSangre tipo={s.tipo_sangre} tamano="sm" />
+                  <FichaSangre tipo={s.tipo_sangre} />
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-gray-900">{esAdmin ? s.hospital_nombre : 'Solicitud #' + s.id}</span>
-                    <span className="block text-xs text-gray-600">{hace(s.fecha_solicitud)}</span>
+                    <span className="block text-sm font-semibold text-gray-900">{esAdmin ? s.hospital_nombre : 'Solicitud #' + s.id}</span>
+                    <span className="block text-xs text-gray-600">{abierta(s.fecha_solicitud)}</span>
                   </span>
-                  <span className="justify-self-end md:justify-self-start"><BadgeUrgencia urgencia={s.urgencia} /></span>
-                  <BarraProgreso valor={s.unidades_donadas} maximo={s.unidades_requeridas} etiqueta={'Unidades obtenidas de la solicitud ' + s.id} className="col-span-3 md:col-span-1" />
-                  <span className="col-span-3 whitespace-nowrap text-xs text-gray-700 md:col-span-1 md:text-right md:text-sm">
-                    <span className="font-semibold tabular-nums text-gray-900">{s.unidades_donadas}</span> de <span className="tabular-nums">{s.unidades_requeridas}</span>
-                    {completa ? <span className="text-emerald-700"> · completa</span> : ' unidades'}
+                  <span className="justify-self-end @3xl:justify-self-start"><BadgeUrgencia urgencia={s.urgencia} /></span>
+                  <BarraProgreso valor={s.unidades_donadas} maximo={s.unidades_requeridas} etiqueta={'Unidades obtenidas de la solicitud ' + s.id} className="col-span-2 self-center @3xl:col-span-1" />
+                  <span className="flex items-baseline justify-end gap-1.5 whitespace-nowrap text-sm text-gray-600">
+                    <span className="font-display text-2xl font-bold tabular-nums text-gray-900">{s.unidades_donadas}</span>
+                    de <span className="tabular-nums">{s.unidades_requeridas}</span>
+                    {completa ? <span className="font-medium text-emerald-700">· completa</span> : null}
                   </span>
                 </Link>
               </li>
@@ -218,21 +315,31 @@ function SolicitudesAtendidas({ lista, base, esAdmin }) {
 }
 
 // Barras de un solo color; los tipos sin ningun donante se nombran al pie
-function DonantesPorTipo({ grupos }) {
+// Los tipos que piden las solicitudes activas se resaltan para ver de un vistazo si hay con quien cubrirlas
+function DonantesPorTipo({ grupos, solicitados }) {
   const sinDonantes = grupos.filter((g) => g.total === 0).map((g) => g.tipo_sangre);
   return (
     <Panel titulo="Donantes por tipo de sangre" detalle="Registrados en todo el estado">
-      <div className="space-y-2.5">
-        {grupos.map((g) => (
-          <div key={g.tipo_sangre} className="grid grid-cols-[2.5rem_minmax(0,1fr)_4.5rem] items-center gap-3 text-sm">
-            <span className="font-semibold text-gray-900">{g.tipo_sangre}</span>
-            <div className="h-2 overflow-hidden rounded-full bg-acento-50" role="img" aria-label={g.tipo_sangre + ': ' + g.total + ' donantes, ' + g.porcentaje + ' por ciento'}>
-              <div className="h-full rounded-full bg-acento-600" style={{ width: g.porcentaje + '%' }} />
+      <div className="space-y-2">
+        {grupos.map((g) => {
+          const pedido = solicitados.has(g.tipo_sangre);
+          return (
+            <div key={g.tipo_sangre} className={'-mx-2 grid grid-cols-[2.75rem_minmax(0,1fr)_4.5rem] items-center gap-3 rounded-lg px-2 py-1 text-sm ' + (pedido ? 'bg-red-50' : '')}>
+              <span className={'font-semibold ' + (pedido ? 'text-red-700' : 'text-gray-900')}>{g.tipo_sangre}</span>
+              <div className="h-2 overflow-hidden rounded-full bg-acento-50" role="img" aria-label={g.tipo_sangre + ': ' + g.total + ' donantes, ' + g.porcentaje + ' por ciento' + (pedido ? ', con solicitud activa' : '')}>
+                <div className="h-full origin-left animate-llenar rounded-full bg-acento-600 motion-reduce:animate-none" style={{ width: g.porcentaje + '%' }} />
+              </div>
+              <span className="text-right text-xs tabular-nums text-gray-600">{g.total} · {g.porcentaje}%</span>
             </div>
-            <span className="text-right text-xs tabular-nums text-gray-600">{g.total} · {g.porcentaje}%</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
+      {solicitados.size > 0 && (
+        <p className="mt-3 flex items-center gap-2 text-xs text-gray-600">
+          <span className="inline-block size-3 rounded bg-red-50 ring-1 ring-inset ring-red-200" aria-hidden="true" />
+          Tipos con solicitud activa
+        </p>
+      )}
       <p className={'mt-4 border-t border-gray-100 pt-3 text-sm ' + (sinDonantes.length > 0 ? 'text-red-700' : 'text-gray-600')}>
         {sinDonantes.length > 0
           ? 'Sin donantes registrados: ' + sinDonantes.join(', ') + '.'

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation, useParams } from 'react-router';
-import { X } from 'lucide-react';
+import { CircleCheck, X } from 'lucide-react';
 import { auditoria, notificaciones, solicitudes } from '../../api/servicios.js';
 import { useConsulta } from '../../hooks/useConsulta.js';
 import { useSesion } from '../../contexto/SesionContext.jsx';
@@ -70,8 +70,8 @@ export default function DetalleSolicitud() {
                   {(solicitud.notificaciones || []).length === 0 ? (
                     <Vacio titulo="Aún no se ha notificado a ningún donante" className="m-5" />
                   ) : (
-                    <div className="text-sm">
-                      <div className={'hidden px-5 py-2.5 text-xs font-medium text-gray-600 md:grid ' + COLUMNAS_NOTIFICACION}>
+                    <div className="@container text-sm">
+                      <div className={'hidden px-5 py-2.5 text-xs font-medium text-gray-600 @3xl:grid ' + COLUMNAS_NOTIFICACION}>
                         <span>Código</span>
                         <span>Estado</span>
                         <span>Notificado</span>
@@ -79,7 +79,7 @@ export default function DetalleSolicitud() {
                         <span className="text-right">Acciones</span>
                       </div>
                       <ul className="divide-y divide-gray-100 border-t border-gray-100">
-                        {solicitud.notificaciones.map((n) => (
+                        {[...solicitud.notificaciones].sort((a, b) => (ORDEN_NOTIFICACION[a.estado] ?? 9) - (ORDEN_NOTIFICACION[b.estado] ?? 9)).map((n) => (
                           <FilaNotificacion
                             key={n.id}
                             notificacion={n}
@@ -130,24 +130,46 @@ function textoNotificados(cantidad) {
 }
 
 // Cada donacion registrada cuenta como una unidad
+// Al juntar todas las unidades el bloque pasa a verde lleno: es el momento de cerrar la solicitud
 function ProgresoUnidades({ donadas, requeridas, activa }) {
   const completa = donadas >= requeridas;
 
+  if (completa) {
+    return (
+      <section aria-labelledby="titulo-unidades" className="animate-aparecer rounded-xl bg-emerald-700 p-5 text-white motion-reduce:animate-none md:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <CircleCheck className="size-8 shrink-0" aria-hidden="true" />
+            <h2 id="titulo-unidades" className="font-display text-2xl font-bold leading-tight md:text-[1.75rem]">Unidades obtenidas</h2>
+          </div>
+          <p className="flex items-baseline gap-1.5 text-base">
+            <span className="font-display text-5xl font-bold leading-none tabular-nums">{donadas}</span>
+            de <span className="tabular-nums">{requeridas}</span> {requeridas === 1 ? 'unidad' : 'unidades'}
+          </p>
+        </div>
+        {activa && (
+          <p className="mt-3 text-sm">Se alcanzaron las unidades requeridas. Puedes marcar la solicitud como completada.</p>
+        )}
+      </section>
+    );
+  }
+
   return (
-    <section aria-labelledby="titulo-unidades" className={'rounded-xl p-5 ' + (completa ? 'bg-emerald-50' : 'bg-acento-50')}>
+    <section aria-labelledby="titulo-unidades" className="rounded-xl border border-gray-200 bg-white p-5 md:p-6">
       <div className="flex flex-wrap items-end justify-between gap-2">
-        <h2 id="titulo-unidades" className={'text-sm font-semibold ' + (completa ? 'text-emerald-800' : 'text-acento-800')}>Unidades obtenidas</h2>
-        <p className="text-sm text-gray-700">
-          <span className="text-3xl font-semibold tabular-nums text-gray-900">{donadas}</span> de <span className="tabular-nums">{requeridas}</span> {requeridas === 1 ? 'unidad' : 'unidades'}
+        <h2 id="titulo-unidades" className="text-sm font-semibold text-gray-900">Unidades obtenidas</h2>
+        <p className="flex items-baseline gap-1.5 text-sm text-gray-600">
+          <span className="font-display text-5xl font-bold leading-none tabular-nums text-gray-900">{donadas}</span>
+          de <span className="tabular-nums">{requeridas}</span> {requeridas === 1 ? 'unidad' : 'unidades'}
         </p>
       </div>
-      <BarraProgreso valor={donadas} maximo={requeridas} etiqueta="Unidades obtenidas" className="mt-3" />
-      {completa && activa && (
-        <p className="mt-3 text-sm text-emerald-800">Se alcanzaron las unidades requeridas. Puedes marcar la solicitud como completada.</p>
-      )}
+      <BarraProgreso valor={donadas} maximo={requeridas} etiqueta="Unidades obtenidas" className="mt-4" />
     </section>
   );
 }
+
+// Primero quien confirmo (viene en camino), luego sin responder, luego el resto
+const ORDEN_NOTIFICACION = { confirmada: 0, enviada: 1, donada: 2, rechazada: 3 };
 
 function Acciones({ solicitud, alTerminar }) {
   const [ocupado, setOcupado] = useState(null);
@@ -207,8 +229,8 @@ function Acciones({ solicitud, alTerminar }) {
   );
 }
 
-// En escritorio la lista se ve como tabla; en celular cada notificacion es una tarjeta
-const COLUMNAS_NOTIFICACION = 'md:grid-cols-[6rem_11rem_minmax(0,1fr)_minmax(0,1fr)_auto] md:gap-4';
+// Con espacio suficiente la lista se ve como tabla; en un contenedor angosto cada notificacion es una tarjeta
+const COLUMNAS_NOTIFICACION = '@3xl:grid-cols-[6rem_11rem_minmax(0,1fr)_minmax(0,1fr)_auto] @3xl:gap-4';
 
 function FilaNotificacion({ notificacion: n, solicitudCancelada, alRegistrar, alVerificar }) {
   const [registrando, setRegistrando] = useState(false);
@@ -226,20 +248,20 @@ function FilaNotificacion({ notificacion: n, solicitudCancelada, alRegistrar, al
   }
 
   return (
-    <li className={'px-5 py-3.5 md:grid md:items-center ' + COLUMNAS_NOTIFICACION}>
-      <div className="flex items-center justify-between gap-2 md:contents">
+    <li className={'px-5 py-3.5 @3xl:grid @3xl:items-center ' + COLUMNAS_NOTIFICACION}>
+      <div className="flex items-center justify-between gap-2 @3xl:contents">
         <span className="font-mono text-sm font-semibold text-gray-900">{codigoAsistencia(n.id)}</span>
         <span><BadgeEstadoNotificacion estado={n.estado} /></span>
       </div>
-      <p className="mt-1 text-xs text-gray-600 md:mt-0 md:text-sm"><span className="md:hidden">Notificado: </span>{hace(n.fecha_envio)}</p>
-      <p className="text-xs text-gray-600 md:text-sm">
-        <span className="md:hidden">Respuesta: </span>{n.fecha_respuesta ? fechaHora(n.fecha_respuesta) : '-'}
+      <p className="mt-1 text-xs text-gray-600 @3xl:mt-0 @3xl:text-sm"><span className="@3xl:hidden">Notificado: </span>{hace(n.fecha_envio)}</p>
+      <p className="text-xs text-gray-600 @3xl:text-sm">
+        <span className="@3xl:hidden">Respuesta: </span>{n.fecha_respuesta ? fechaHora(n.fecha_respuesta) : '-'}
       </p>
-      <div className="mt-3 flex gap-2 md:mt-0 md:justify-end">
+      <div className="mt-3 flex gap-2 @3xl:mt-0 @3xl:justify-end">
         {n.estado === 'confirmada' && !solicitudCancelada && (
-          <Boton className="flex-1 px-3 py-1.5 md:flex-none" cargando={registrando} onClick={registrar}>Registrar donación</Boton>
+          <Boton className="flex-1 px-3 py-1.5 @3xl:flex-none" cargando={registrando} onClick={registrar}>Registrar donación</Boton>
         )}
-        <Boton variante="contorno" className="flex-1 px-3 py-1.5 md:flex-none" onClick={alVerificar}>Ver historial</Boton>
+        <Boton variante="contorno" className="flex-1 px-3 py-1.5 @3xl:flex-none" onClick={alVerificar}>Ver historial</Boton>
       </div>
     </li>
   );

@@ -44,6 +44,7 @@ export const solicitudes = {
 export const notificaciones = {
   notificar: (datos) => api.post('/notificaciones/notificar', datos),
   mias: () => api.get('/notificaciones/mis-notificaciones'),
+  confirmadas: () => api.get('/notificaciones/confirmadas'),
   responder: (id, respuesta) => api.patch('/notificaciones/' + id + '/responder', { respuesta }),
   registrarDonacion: (id) => api.patch('/notificaciones/' + id + '/donacion')
 };
@@ -51,8 +52,7 @@ export const notificaciones = {
 export const auditoria = {
   miHistorial: () => api.get('/auditoria/mi-historial'),
   porNotificacion: (idNotificacion) => api.get('/auditoria/notificacion/' + idNotificacion),
-  estado: () => api.get('/auditoria/estado'),
-  verificar: (hash) => api.get('/auditoria/verificar/' + hash)
+  estado: () => api.get('/auditoria/estado')
 };
 
 export const reportes = {

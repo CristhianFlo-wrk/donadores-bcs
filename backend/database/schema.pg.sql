@@ -126,7 +126,6 @@ CREATE TABLE historial_donaciones (
     region VARCHAR(20) CHECK (region IN ('norte', 'centro', 'sur')) NOT NULL,
     hash_anterior VARCHAR(64) NOT NULL,
     hash_actual VARCHAR(64) NOT NULL,
-    firma_hospital VARCHAR(255),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 

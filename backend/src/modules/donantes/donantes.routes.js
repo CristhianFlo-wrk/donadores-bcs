@@ -3,7 +3,6 @@ import {
   getPerfil,
   putPerfil,
   patchDisponibilidad,
-  getCompatibles,
   getStats,
   putFcmToken
 } from './donantes.controller.js';
@@ -17,8 +16,5 @@ router.put('/perfil', verificarToken, soloRol('donante'), putPerfil);
 router.patch('/disponibilidad', verificarToken, soloRol('donante'), patchDisponibilidad);
 router.get('/stats', verificarToken, soloRol('donante'), getStats);
 router.put('/fcm-token', verificarToken, soloRol('donante'), putFcmToken);
-
-// Busqueda de compatibles para hospitales y admin
-router.get('/compatibles/:idTipoSangre', verificarToken, soloRol('hospital', 'admin'), getCompatibles);
 
 export default router;

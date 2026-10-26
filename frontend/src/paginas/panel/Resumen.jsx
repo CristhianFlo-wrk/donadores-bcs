@@ -133,15 +133,15 @@ function ordenarPorUrgencia(lista) {
 
 // Donantes que confirmaron asistencia en cualquier solicitud activa del hospital; registrar aqui es la misma accion que en el detalle
 function EnCamino({ activas, base, alRegistrar }) {
-  const ids = activas.map((s) => s.id).join(',');
-  const consulta = useConsulta(() => Promise.all(activas.map((s) => solicitudes.obtener(s.id))), [ids], { intervaloMs: 15000 });
+  const consulta = useConsulta(() => notificaciones.confirmadas(), [], { intervaloMs: 15000 });
   const [aviso, setAviso] = useState(null);
 
+  if (consulta.error) {
+    return <Aviso tono="error" className="mb-6">No se pudieron cargar los donantes en camino. {consulta.error.message}</Aviso>;
+  }
   if (activas.length === 0 || !consulta.datos) return null;
 
-  const llegadas = consulta.datos
-    .flatMap(({ solicitud }) => (solicitud.notificaciones || []).filter((n) => n.estado === 'confirmada').map((n) => ({ ...n, solicitud })))
-    .sort((a, b) => new Date(a.fecha_respuesta) - new Date(b.fecha_respuesta));
+  const llegadas = consulta.datos.notificaciones;
 
   async function alTerminar(nuevoAviso) {
     setAviso(nuevoAviso);
@@ -193,12 +193,12 @@ function FilaEnCamino({ notificacion: n, base, alTerminar }) {
       <span className="font-mono text-2xl font-bold tracking-wide">{codigoAsistencia(n.id)}</span>
       <span className="min-w-40 flex-1 text-sm">
         <span className="block font-semibold">
-          Sangre {n.solicitud.tipo_sangre} · {n.solicitud.urgencia === 'critica' ? 'Crítica' : 'Urgente'}
+          Sangre {n.tipo_sangre} · {n.urgencia === 'critica' ? 'Crítica' : 'Urgente'}
         </span>
         <span className="block">
           Confirmó {hace(n.fecha_respuesta).toLowerCase()} ·{' '}
-          <Link to={base + '/solicitudes/' + n.solicitud.id} className="rounded underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
-            Solicitud #{n.solicitud.id}
+          <Link to={base + '/solicitudes/' + n.id_solicitud} className="rounded underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+            Solicitud #{n.id_solicitud}
           </Link>
         </span>
       </span>

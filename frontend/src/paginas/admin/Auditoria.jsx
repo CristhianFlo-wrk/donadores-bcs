@@ -1,11 +1,7 @@
-import { useState } from 'react';
-import { ShieldCheck } from 'lucide-react';
 import { auditoria } from '../../api/servicios.js';
 import { useConsulta } from '../../hooks/useConsulta.js';
-import { Aviso, Boton, Campo, EncabezadoPagina, EstadoConsulta, Panel, TiraMetricas } from '../../componentes/ui.jsx';
+import { EncabezadoPagina, EstadoConsulta, Panel, TiraMetricas } from '../../componentes/ui.jsx';
 import BloqueIntegridad from '../../componentes/BloqueIntegridad.jsx';
-
-const REGEX_HASH = /^[0-9a-f]{64}$/;
 
 export default function Auditoria() {
   const consultaEstado = useConsulta(() => auditoria.estado());
@@ -31,16 +27,8 @@ export default function Auditoria() {
 
             <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
               <div className="min-w-0 space-y-6">
-                <section aria-labelledby="titulo-cadena" className="rounded-xl bg-gray-950 p-5 text-white">
-                  <h2 id="titulo-cadena" className="flex items-center gap-2 text-sm font-semibold text-gray-300">
-                    <ShieldCheck className="size-4 text-gray-400" aria-hidden="true" />
-                    Último hash de la bitácora
-                  </h2>
-                  <p className="mt-3 break-all rounded-lg bg-white/5 px-3 py-2 font-mono text-xs text-gray-300">{estado.ultimo_hash_logs || 'Sin registros'}</p>
-                  <p className="mt-3 text-xs text-gray-400">Cada nueva acción toma este hash como anterior; cambiar cualquier registro previo cambia todos los siguientes.</p>
-                </section>
-
-                <VerificarDonante />
+                <BloqueIntegridad verificacion={estado.verificacion_donaciones} titulo="Historial de donaciones: última donación encadenada" />
+                <BloqueIntegridad verificacion={estado.verificacion_logs} titulo="Bitácora de acciones: último hash" />
               </div>
 
               <Panel titulo="Cómo funciona la cadena" className="xl:sticky xl:top-8">
@@ -65,53 +53,5 @@ export default function Auditoria() {
         )}
       </EstadoConsulta>
     </>
-  );
-}
-
-function VerificarDonante() {
-  const [hash, setHash] = useState('');
-  const [resultado, setResultado] = useState(null);
-  const [error, setError] = useState('');
-  const [verificando, setVerificando] = useState(false);
-
-  async function verificar(evento) {
-    evento.preventDefault();
-    setError('');
-    setResultado(null);
-    const valor = hash.trim().toLowerCase();
-    if (!REGEX_HASH.test(valor)) return setError('El hash debe tener 64 caracteres hexadecimales.');
-
-    setVerificando(true);
-    try {
-      const respuesta = await auditoria.verificar(valor);
-      setResultado(respuesta.verificacion);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setVerificando(false);
-    }
-  }
-
-  return (
-    <Panel titulo="Verificar el historial de un donante" detalle="Usa el hash del donante (HMAC de su CURP); nunca se muestra la CURP.">
-      <form onSubmit={verificar} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <Campo
-          etiqueta="Hash del donante"
-          id="hash"
-          className="flex-1"
-          value={hash}
-          onChange={(e) => setHash(e.target.value)}
-          placeholder="64 caracteres hexadecimales"
-          spellCheck={false}
-        />
-        <Boton type="submit" cargando={verificando}>Verificar</Boton>
-      </form>
-      <Aviso className="mt-3">{error}</Aviso>
-      {resultado && (
-        <div className="mt-4">
-          <BloqueIntegridad verificacion={resultado} />
-        </div>
-      )}
-    </Panel>
   );
 }

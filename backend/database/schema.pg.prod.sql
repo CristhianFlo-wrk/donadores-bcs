@@ -115,7 +115,6 @@ CREATE TABLE IF NOT EXISTS historial_donaciones (
     region VARCHAR(20) CHECK (region IN ('norte', 'centro', 'sur')) NOT NULL,
     hash_anterior VARCHAR(64) NOT NULL,
     hash_actual VARCHAR(64) NOT NULL,
-    firma_hospital VARCHAR(255),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -138,6 +137,5 @@ CREATE INDEX IF NOT EXISTS idx_historial_region ON historial_donaciones(region);
 CREATE INDEX IF NOT EXISTS idx_historial_hash ON historial_donaciones(hash_actual);
 CREATE INDEX IF NOT EXISTS idx_solicitudes_estado ON solicitudes(estado);
 
-ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS unidades_requeridas INTEGER NOT NULL DEFAULT 1 CHECK (unidades_requeridas BETWEEN 1 AND 20);
 CREATE INDEX IF NOT EXISTS idx_auditoria_fecha ON auditoria_logs(fecha);
 CREATE INDEX IF NOT EXISTS idx_auditoria_usuario ON auditoria_logs(id_usuario);

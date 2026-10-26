@@ -851,6 +851,46 @@
           ]
         },
         {
+          "name": "Vienen en camino (hospital)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notificaciones/confirmadas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notificaciones",
+                "confirmadas"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenHospital}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('incluye la notificacion confirmada', () => pm.expect(cuerpo.notificaciones.map((n) => n.id)).to.include(Number(pm.collectionVariables.get('idNotificacion'))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Registrar donacion",
           "request": {
             "method": "PATCH",

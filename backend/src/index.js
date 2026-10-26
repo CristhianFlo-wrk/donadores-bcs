@@ -56,13 +56,13 @@ app.use((req, res) => {
 // Express manda errores no capturados, incluidos los de funciones async
 app.use((error, req, res, next) => {
   if (error.type === 'entity.parse.failed') {
-    return res.status(400).json({ ok: false, error: 'JSON invalido' });
+    return res.status(400).json({ ok: false, error: 'JSON inválido' });
   }
   if (error instanceof ErrorHttp) {
     return res.status(error.status).json({ ok: false, error: error.message });
   }
   if (esDatoInvalidoPg(error)) {
-    return res.status(400).json({ ok: false, error: 'Dato con formato invalido' });
+    return res.status(400).json({ ok: false, error: 'Dato con formato inválido' });
   }
   console.error('[ERROR] ' + req.method + ' ' + req.originalUrl + ': ' + error.message);
   res.status(500).json({ ok: false, error: 'Error interno del servidor' });

@@ -180,7 +180,7 @@ export async function obtenerHashPorNotificacion(idNotificacion) {
     WHERE n.id = $1
   `, [idNotificacion]);
   if (rows.length === 0) {
-    throw errorNoEncontrado('Notificacion no encontrada');
+    throw errorNoEncontrado('Notificación no encontrada');
   }
   return { hash: rows[0].curp_hash, idHospital: rows[0].id_hospital };
 }

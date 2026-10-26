@@ -66,7 +66,7 @@ export async function actualizarPerfil(idUsuario, cambios, contexto = {}) {
 
   if (cambios.nombre_completo !== undefined) {
     if (!cambios.nombre_completo || !String(cambios.nombre_completo).trim()) {
-      throw errorValidacion('nombre_completo no puede estar vacio');
+      throw errorValidacion('nombre_completo no puede estar vacío');
     }
     agregar('nombre_cifrado', cifrar(String(cambios.nombre_completo).trim()));
   }
@@ -86,7 +86,7 @@ export async function actualizarPerfil(idUsuario, cambios, contexto = {}) {
   if (cambios.longitud !== undefined) agregar('longitud', cambios.longitud);
 
   if (cambios.colonia_personalizada !== undefined && cambios.id_colonia === undefined) {
-    throw errorValidacion('Para cambiar colonia_personalizada envia tambien id_colonia');
+    throw errorValidacion('Para cambiar colonia_personalizada envía también id_colonia');
   }
 
   await transaccion(async (client) => {
@@ -102,7 +102,7 @@ export async function actualizarPerfil(idUsuario, cambios, contexto = {}) {
       parsearId(cambios.id_tipo_sangre, 'id_tipo_sangre');
       const tipo = await client.query('SELECT id FROM tipos_sangre WHERE id = $1', [cambios.id_tipo_sangre]);
       if (tipo.rows.length === 0) {
-        throw errorValidacion('Tipo de sangre invalido');
+        throw errorValidacion('Tipo de sangre inválido');
       }
       agregar('id_tipo_sangre', cambios.id_tipo_sangre);
     }
@@ -159,7 +159,7 @@ export async function cambiarDisponibilidad(idUsuario, disponible, contexto = {}
 
 export async function actualizarFcmToken(idUsuario, fcmToken) {
   if (fcmToken !== null && (typeof fcmToken !== 'string' || !fcmToken.trim() || fcmToken.length > 4096)) {
-    throw errorValidacion('fcm_token debe ser un texto no vacio de hasta 4096 caracteres o null');
+    throw errorValidacion('fcm_token debe ser un texto no vacío de hasta 4096 caracteres o null');
   }
 
   const { rowCount } = await query(

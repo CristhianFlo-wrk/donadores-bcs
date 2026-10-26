@@ -9,7 +9,7 @@ import { registrarLog } from '../auditoria/auditoria.service.js';
 const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const REGEX_CURP = /^[A-Z]{4}\d{6}[HMX][A-Z]{5}[A-Z0-9]\d$/;
 const SEXOS = ['M', 'F', 'otro'];
-const MENSAJE_DUPLICADO = 'El email o CURP ya esta registrado';
+const MENSAJE_DUPLICADO = 'El email o CURP ya está registrado';
 
 // Validaciones que no requieren base de datos
 function validarDatosRegistro(datos) {
@@ -26,23 +26,23 @@ function validarDatosRegistro(datos) {
   parsearId(idColonia, 'id_colonia');
 
   if (!REGEX_EMAIL.test(email)) {
-    throw errorValidacion('Email invalido');
+    throw errorValidacion('Email inválido');
   }
 
   if (String(password).length < 8) {
-    throw errorValidacion('La contrasena debe tener al menos 8 caracteres');
+    throw errorValidacion('La contraseña debe tener al menos 8 caracteres');
   }
 
   if (!REGEX_CURP.test(normalizarCURP(curp))) {
-    throw errorValidacion('CURP con formato invalido');
+    throw errorValidacion('CURP con formato inválido');
   }
 
   const edad = calcularEdad(fechaNacimiento);
   if (edad === null) {
-    throw errorValidacion('fecha_nacimiento invalida, usar formato YYYY-MM-DD');
+    throw errorValidacion('fecha_nacimiento inválida, usar formato YYYY-MM-DD');
   }
   if (edad < 18 || edad > 65) {
-    throw errorValidacion('Debes tener entre 18 y 65 anos para donar');
+    throw errorValidacion('Debes tener entre 18 y 65 años para donar');
   }
 
   if (sexo !== undefined && sexo !== null && !SEXOS.includes(sexo)) {
@@ -74,7 +74,7 @@ export async function registrarDonante(datos, contexto = {}) {
 
       const tipoSangre = await client.query('SELECT id FROM tipos_sangre WHERE id = $1', [datos.id_tipo_sangre]);
       if (tipoSangre.rows.length === 0) {
-        throw errorValidacion('Tipo de sangre invalido');
+        throw errorValidacion('Tipo de sangre inválido');
       }
 
       const colonia = await resolverColonia(datos.id_colonia, datos.colonia_personalizada, client);
@@ -154,7 +154,7 @@ export async function login(email, password, contexto = {}) {
       detalles: { email: String(email).trim().toLowerCase() },
       ipOrigen: contexto.ip
     });
-    throw new ErrorHttp(401, 'Credenciales invalidas');
+    throw new ErrorHttp(401, 'Credenciales inválidas');
   }
 
   if (!usuario.activo) {
@@ -186,10 +186,10 @@ export async function crearUsuario(datos, contexto = {}) {
     throw errorValidacion('Faltan campos obligatorios: email, password, rol');
   }
   if (!REGEX_EMAIL.test(email)) {
-    throw errorValidacion('Email invalido');
+    throw errorValidacion('Email inválido');
   }
   if (String(password).length < 8) {
-    throw errorValidacion('La contrasena debe tener al menos 8 caracteres');
+    throw errorValidacion('La contraseña debe tener al menos 8 caracteres');
   }
   if (!ROLES_ADMINISTRADOS.includes(rol)) {
     throw errorValidacion('rol debe ser "hospital" o "admin"');
@@ -234,7 +234,7 @@ export async function crearUsuario(datos, contexto = {}) {
     });
   } catch (error) {
     if (error.code === '23505') {
-      throw errorValidacion('El email ya esta registrado');
+      throw errorValidacion('El email ya está registrado');
     }
     throw error;
   }

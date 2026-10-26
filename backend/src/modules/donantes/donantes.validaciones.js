@@ -8,7 +8,7 @@ export function validarPeso(pesoKg) {
   if (pesoKg === undefined || pesoKg === null) return;
   const peso = Number(pesoKg);
   if (!Number.isFinite(peso) || peso < PESO_MINIMO_KG) {
-    throw errorValidacion('El peso minimo para donar es 50 kg');
+    throw errorValidacion('El peso mínimo para donar es 50 kg');
   }
   if (peso > PESO_MAXIMO_KG) {
     throw errorValidacion('peso_kg fuera de rango');

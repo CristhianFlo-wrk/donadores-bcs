@@ -29,7 +29,7 @@ export async function notificarSolicitud(usuario, idSolicitud, opciones = {}, co
   verificarAccesoHospital(usuario, solicitud.id_hospital);
 
   if (solicitud.estado !== 'activa') {
-    throw errorValidacion('La solicitud no esta activa');
+    throw errorValidacion('La solicitud no está activa');
   }
 
   const region = regionDeBusqueda(solicitud, opciones);
@@ -127,16 +127,16 @@ export async function responderNotificacion(idUsuario, idNotificacion, respuesta
     const notificacion = rows[0];
     // 404 tambien si es de otro donante, para no revelar que existe
     if (!notificacion || notificacion.id_usuario !== idUsuario) {
-      throw errorNoEncontrado('Notificacion no encontrada');
+      throw errorNoEncontrado('Notificación no encontrada');
     }
 
     if (notificacion.solicitud_estado !== 'activa') {
-      throw errorValidacion('La solicitud ya no esta activa');
+      throw errorValidacion('La solicitud ya no está activa');
     }
 
     // Se permite cambiar de confirmada a rechazada y viceversa mientras no haya donado
     if (notificacion.estado === 'donada') {
-      throw errorValidacion('La notificacion ya esta donada');
+      throw errorValidacion('La notificación ya está donada');
     }
 
     await client.query(`
@@ -208,16 +208,16 @@ export async function registrarDonacion(usuario, idNotificacion, contexto = {}) 
 
     const notificacion = rows[0];
     if (!notificacion) {
-      throw errorNoEncontrado('Notificacion no encontrada');
+      throw errorNoEncontrado('Notificación no encontrada');
     }
 
     verificarAccesoHospital(usuario, notificacion.id_hospital);
 
     if (notificacion.estado === 'donada') {
-      throw errorValidacion('La donacion ya fue registrada');
+      throw errorValidacion('La donación ya fue registrada');
     }
     if (notificacion.estado !== 'confirmada') {
-      throw errorValidacion('Solo se registra la donacion de un donante que confirmo asistencia');
+      throw errorValidacion('Solo se registra la donación de un donante que confirmó asistencia');
     }
     if (notificacion.solicitud_estado === 'cancelada') {
       throw errorValidacion('La solicitud fue cancelada');
@@ -225,7 +225,7 @@ export async function registrarDonacion(usuario, idNotificacion, contexto = {}) 
 
     const dias = notificacion.dias_desde_ultima;
     if (dias !== null && dias < DIAS_ENTRE_DONACIONES) {
-      throw new ErrorHttp(409, `El donante dono hace ${dias} dias; minimo ${DIAS_ENTRE_DONACIONES}`);
+      throw new ErrorHttp(409, `El donante donó hace ${dias} días; mínimo ${DIAS_ENTRE_DONACIONES}`);
     }
 
     const entrada = await registrarEntrada(client, {

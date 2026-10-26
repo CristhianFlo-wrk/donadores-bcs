@@ -58,28 +58,28 @@ describe('POST /api/auth/registro', () => {
   it('rechaza email duplicado (sin importar mayusculas)', async () => {
     const res = await registrar(donante({ email: 'JUAN.PEREZ@example.com', curp: 'PELJ950520HBSRPN02' }));
     assert.equal(res.status, 400);
-    assert.equal(res.body.error, 'El email o CURP ya esta registrado');
+    assert.equal(res.body.error, 'El email o CURP ya está registrado');
   });
 
   it('rechaza CURP duplicado (sin importar mayusculas)', async () => {
     const res = await registrar(donante({ email: 'otro@example.com', curp: 'pelj950520hbsrpn01' }));
     assert.equal(res.status, 400);
     // Mismo mensaje que el email repetido: no revela que la CURP ya es de un donante
-    assert.equal(res.body.error, 'El email o CURP ya esta registrado');
+    assert.equal(res.body.error, 'El email o CURP ya está registrado');
   });
 
   it('valida campos obligatorios, CURP, edad, sexo y peso', async () => {
     const casos = [
       [{ email: undefined }, /Faltan campos/],
-      [{ email: 'no-es-email' }, /Email invalido/],
+      [{ email: 'no-es-email' }, /Email inválido/],
       [{ password: 'corta' }, /al menos 8/],
       [{ curp: 'XXXX' }, /CURP/],
       [{ fecha_nacimiento: '2015-01-01' }, /entre 18 y 65/],
-      [{ fecha_nacimiento: '20-05-1995' }, /fecha_nacimiento invalida/],
+      [{ fecha_nacimiento: '20-05-1995' }, /fecha_nacimiento inválida/],
       [{ sexo: 'X' }, /sexo/],
       [{ peso_kg: 45 }, /50 kg/],
       [{ latitud: 99999 }, /latitud/],
-      [{ id_tipo_sangre: 99 }, /Tipo de sangre invalido/],
+      [{ id_tipo_sangre: 99 }, /Tipo de sangre inválido/],
       [{ id_colonia: 9999 }, /Colonia no encontrada/]
     ];
     for (const [cambios, mensaje] of casos) {
@@ -132,7 +132,7 @@ describe('POST /api/auth/registro', () => {
   it('400 con JSON invalido', async () => {
     const res = await request(app).post('/api/auth/registro').set('Content-Type', 'application/json').send('{malo');
     assert.equal(res.status, 400);
-    assert.equal(res.body.error, 'JSON invalido');
+    assert.equal(res.body.error, 'JSON inválido');
   });
 });
 

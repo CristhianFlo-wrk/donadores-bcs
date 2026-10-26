@@ -12,7 +12,7 @@ export async function verificarToken(req, res, next) {
   try {
     datos = jwt.verify(token, process.env.JWT_SECRET);
   } catch (error) {
-    return res.status(401).json({ ok: false, error: 'Token invalido o expirado' });
+    return res.status(401).json({ ok: false, error: 'Token inválido o expirado' });
   }
 
   const { rows } = await query('SELECT id, email, rol, id_hospital, activo FROM usuarios WHERE id = $1', [datos.id]);
@@ -29,7 +29,7 @@ export async function verificarToken(req, res, next) {
 export function soloRol(...roles) {
   return (req, res, next) => {
     if (!req.usuario || !roles.includes(req.usuario.rol)) {
-      return res.status(403).json({ ok: false, error: 'Sin permisos para esta accion' });
+      return res.status(403).json({ ok: false, error: 'Sin permisos para esta acción' });
     }
     next();
   };

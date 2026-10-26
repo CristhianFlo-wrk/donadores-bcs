@@ -45,7 +45,7 @@ export async function crearSolicitud(idHospital, datos, contexto = {}) {
 
   const tipo = await query('SELECT id FROM tipos_sangre WHERE id = $1', [idTipoSangre]);
   if (tipo.rows.length === 0) {
-    throw errorValidacion('Tipo de sangre invalido');
+    throw errorValidacion('Tipo de sangre inválido');
   }
 
   const idSolicitud = await transaccion(async (client) => {
@@ -186,7 +186,7 @@ export async function buscarCandidatos(idSolicitud, filtros = {}) {
   const solicitud = await obtenerSolicitudBase(idSolicitud);
 
   if (solicitud.estado !== 'activa') {
-    throw errorValidacion('La solicitud no esta activa');
+    throw errorValidacion('La solicitud no está activa');
   }
 
   const candidatos = await buscarCompatibles(solicitud.id_tipo_sangre, {
@@ -229,7 +229,7 @@ export async function cerrarSolicitud(idSolicitud, nuevoEstado, contexto = {}) {
 
   if (!cerrada) {
     const solicitud = await obtenerSolicitudBase(idSolicitud);
-    throw errorValidacion('La solicitud ya esta ' + solicitud.estado);
+    throw errorValidacion('La solicitud ya está ' + solicitud.estado);
   }
 
   console.log('[SOLICITUDES] Solicitud id=' + idSolicitud + ' cerrada como ' + nuevoEstado);

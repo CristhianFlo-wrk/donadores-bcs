@@ -176,7 +176,7 @@ export async function actualizarFcmToken(idUsuario, fcmToken) {
 // Donantes compatibles con un tipo de sangre receptor, para hospitales y admin
 // Solo devuelve datos no identificables: sin nombre, CURP, telefono ni coordenadas exactas
 export async function buscarCompatibles(idTipoReceptor, filtros = {}) {
-  const { region = null, soloDisponibles = true, soloAptos = true, limite = 50 } = filtros;
+  const { region = null, soloDisponibles = true, soloAptos = true, excluirSolicitud = null, limite = 50 } = filtros;
 
   const receptor = await query('SELECT id FROM tipos_sangre WHERE id = $1', [idTipoReceptor]);
   if (receptor.rows.length === 0) {
@@ -215,11 +215,20 @@ export async function buscarCompatibles(idTipoReceptor, filtros = {}) {
     sql += ` AND d.region = $${valores.length}`;
   }
 
+  if (excluirSolicitud) {
+    valores.push(excluirSolicitud);
+    sql += ` AND NOT EXISTS (SELECT 1 FROM notificaciones n WHERE n.id_solicitud = $${valores.length} AND n.id_donante = d.id)`;
+  }
+
   valores.push(limite);
   sql += ` ORDER BY ts.es_donante_universal DESC, d.created_at DESC LIMIT $${valores.length}`;
 
   const { rows } = await query(sql, valores);
   return rows;
+}
+
+export function sinIdDonante(donantes) {
+  return donantes.map(({ id_donante: idDonante, ...resto }) => resto);
 }
 
 // Estadisticas del donante a partir de historial_donaciones

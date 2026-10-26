@@ -1,6 +1,6 @@
 import { query, transaccion } from '../../config/database.js';
 import { errorValidacion, errorNoEncontrado, ErrorHttp, parsearId } from '../../utils/errores.js';
-import { buscarCompatibles } from '../donantes/donantes.service.js';
+import { buscarCompatibles, sinIdDonante } from '../donantes/donantes.service.js';
 import { registrarLog } from '../auditoria/auditoria.service.js';
 
 const URGENCIAS = ['critica', 'urgente'];
@@ -128,7 +128,7 @@ export async function obtenerSolicitudPorId(idSolicitud, { incluirNotificaciones
 
   if (incluirNotificaciones) {
     const { rows: notificaciones } = await query(`
-      SELECT id, id_donante, canal, estado, fecha_envio, fecha_respuesta
+      SELECT id, canal, estado, fecha_envio, fecha_respuesta
       FROM notificaciones
       WHERE id_solicitud = $1
       ORDER BY fecha_envio DESC
@@ -199,7 +199,7 @@ export async function buscarCandidatos(idSolicitud, filtros = {}) {
     hospital_region: solicitud.hospital_region,
     tipo_sangre_requerido: solicitud.tipo_sangre,
     total_candidatos: candidatos.length,
-    candidatos
+    candidatos: sinIdDonante(candidatos)
   };
 }
 

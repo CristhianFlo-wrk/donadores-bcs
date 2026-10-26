@@ -3,11 +3,15 @@ import {
   postNotificar,
   patchResponder,
   getMisNotificaciones,
+  getConfirmadas,
   patchDonacion
 } from './notificaciones.controller.js';
 import { verificarToken, soloRol } from '../../middleware/auth.js';
 
 const router = Router();
+
+// Hospital: confirmaciones de sus solicitudes activas
+router.get('/confirmadas', verificarToken, soloRol('hospital'), getConfirmadas);
 
 // Hospital dueno de la solicitud o admin (el dueno se valida en el service)
 router.post('/notificar', verificarToken, soloRol('hospital', 'admin'), postNotificar);

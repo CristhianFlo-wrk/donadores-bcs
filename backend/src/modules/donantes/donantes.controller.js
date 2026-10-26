@@ -3,6 +3,7 @@ import {
   actualizarPerfil,
   cambiarDisponibilidad,
   buscarCompatibles,
+  sinIdDonante,
   obtenerStats,
   actualizarFcmToken
 } from './donantes.service.js';
@@ -51,7 +52,7 @@ export async function getCompatibles(req, res) {
     soloAptos: req.query.solo_aptos !== 'false',
     limite: parsearLimite(req.query.limite)
   });
-  res.json({ ok: true, total: donantes.length, donantes });
+  res.json({ ok: true, total: donantes.length, donantes: sinIdDonante(donantes) });
 }
 
 export async function getStats(req, res) {

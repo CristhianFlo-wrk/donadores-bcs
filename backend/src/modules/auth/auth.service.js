@@ -9,6 +9,7 @@ import { registrarLog } from '../auditoria/auditoria.service.js';
 const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const REGEX_CURP = /^[A-Z]{4}\d{6}[HMX][A-Z]{5}[A-Z0-9]\d$/;
 const SEXOS = ['M', 'F', 'otro'];
+const MENSAJE_DUPLICADO = 'El email o CURP ya esta registrado';
 
 // Validaciones que no requieren base de datos
 function validarDatosRegistro(datos) {
@@ -61,14 +62,14 @@ export async function registrarDonante(datos, contexto = {}) {
 
   try {
     return await transaccion(async (client) => {
-      const emailExistente = await client.query('SELECT id FROM usuarios WHERE email = $1', [email]);
-      if (emailExistente.rows.length > 0) {
-        throw errorValidacion('El email ya esta registrado');
-      }
-
-      const curpExistente = await client.query('SELECT id FROM donantes WHERE curp_hash = $1', [curpHash]);
-      if (curpExistente.rows.length > 0) {
-        throw errorValidacion('El CURP ya esta registrado');
+      
+      const existente = await client.query(`
+        SELECT 1 FROM usuarios WHERE email = $1
+        UNION ALL
+        SELECT 1 FROM donantes WHERE curp_hash = $2
+      `, [email, curpHash]);
+      if (existente.rows.length > 0) {
+        throw errorValidacion(MENSAJE_DUPLICADO);
       }
 
       const tipoSangre = await client.query('SELECT id FROM tipos_sangre WHERE id = $1', [datos.id_tipo_sangre]);
@@ -130,7 +131,7 @@ export async function registrarDonante(datos, contexto = {}) {
   } catch (error) {
     // 23505 = unique_violation: dos registros simultaneos con el mismo email o CURP
     if (error.code === '23505') {
-      throw errorValidacion('El email o CURP ya esta registrado');
+      throw errorValidacion(MENSAJE_DUPLICADO);
     }
     throw error;
   }

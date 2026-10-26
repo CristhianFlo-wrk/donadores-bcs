@@ -2,6 +2,7 @@ import {
   notificarSolicitud,
   responderNotificacion,
   listarNotificacionesDonante,
+  listarConfirmadasHospital,
   registrarDonacion
 } from './notificaciones.service.js';
 import { getRegion } from '../../config/regiones.js';
@@ -38,6 +39,11 @@ export async function patchResponder(req, res) {
 
 export async function getMisNotificaciones(req, res) {
   const notificaciones = await listarNotificacionesDonante(req.usuario.id);
+  res.json({ ok: true, total: notificaciones.length, notificaciones });
+}
+
+export async function getConfirmadas(req, res) {
+  const notificaciones = await listarConfirmadasHospital(req.usuario.id_hospital);
   res.json({ ok: true, total: notificaciones.length, notificaciones });
 }
 

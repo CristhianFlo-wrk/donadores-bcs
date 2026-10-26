@@ -126,6 +126,30 @@ export async function verificarLogs() {
   return verificarCadena(rows, valoresHashLog);
 }
 
+// Verifica la cadena de cada donante; 
+async function verificarHistoriales() {
+  const { rows } = await query('SELECT * FROM historial_donaciones ORDER BY id_donante_hash, id ASC');
+  const cadenas = new Map();
+  for (const fila of rows) {
+    if (!cadenas.has(fila.id_donante_hash)) cadenas.set(fila.id_donante_hash, []);
+    cadenas.get(fila.id_donante_hash).push(fila);
+  }
+
+  for (const filas of cadenas.values()) {
+    const verificacion = verificarCadena(filas, valoresHashDonacion);
+    if (!verificacion.integra) return { ...verificacion, total: rows.length, donantes: cadenas.size };
+  }
+
+  const ultima = rows.reduce((mayor, fila) => (!mayor || fila.id > mayor.id ? fila : mayor), null);
+  return {
+    integra: true,
+    total: rows.length,
+    donantes: cadenas.size,
+    ultimo_hash: ultima ? ultima.hash_actual : null,
+    mensaje: rows.length === 0 ? 'Sin registros' : 'Cadenas verificadas'
+  };
+}
+
 export async function obtenerHistorialDonante(idDonanteHash) {
   const { rows } = await query(`
     SELECT h.id, h.fecha_donacion, h.grupo_sanguineo, h.id_hospital,
@@ -161,13 +185,14 @@ export async function obtenerHashPorNotificacion(idNotificacion) {
   return { hash: rows[0].curp_hash, idHospital: rows[0].id_hospital };
 }
 
+// shortcut: recalcula las dos cadenas completas en cada consulta; alcanza para miles de registros, paginar o guardar puntos de control si crecen mucho
 export async function obtenerEstado() {
-  const { rows } = await query(`
-    SELECT
-      (SELECT COUNT(*) FROM historial_donaciones) AS total_donaciones,
-      (SELECT COUNT(DISTINCT id_donante_hash) FROM historial_donaciones) AS donantes_con_historial,
-      (SELECT COUNT(*) FROM auditoria_logs) AS total_logs,
-      (SELECT hash_actual FROM auditoria_logs ORDER BY id DESC LIMIT 1) AS ultimo_hash_logs
-  `);
-  return { ...rows[0], ultimo_hash_logs: rows[0].ultimo_hash_logs || HASH_GENESIS };
+  const [donaciones, logs] = await Promise.all([verificarHistoriales(), verificarLogs()]);
+  return {
+    total_donaciones: donaciones.total,
+    donantes_con_historial: donaciones.donantes,
+    total_logs: logs.total,
+    verificacion_donaciones: donaciones,
+    verificacion_logs: logs
+  };
 }

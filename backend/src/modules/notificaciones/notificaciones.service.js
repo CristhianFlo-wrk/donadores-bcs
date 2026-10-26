@@ -37,6 +37,7 @@ export async function notificarSolicitud(usuario, idSolicitud, opciones = {}, co
     region,
     soloDisponibles: true,
     soloAptos: true,
+    excluirSolicitud: idSolicitud,
     limite: opciones.limite || 20
   });
 
@@ -88,7 +89,6 @@ export async function notificarSolicitud(usuario, idSolicitud, opciones = {}, co
     const sms = await enviarSmsSimulado('donante_' + nueva.id_donante, mensaje);
     notificaciones.push({
       id: nueva.id,
-      id_donante: nueva.id_donante,
       canal: 'push',
       estado: 'enviada',
       modo: envio.modo,
@@ -171,6 +171,20 @@ export async function listarNotificacionesDonante(idUsuario) {
     WHERE d.id_usuario = $1
     ORDER BY n.fecha_envio DESC
   `, [idUsuario]);
+  return rows;
+}
+
+// Donantes que confirmaron asistencia en las solicitudes activas del hospital, sin datos del donante
+export async function listarConfirmadasHospital(idHospital) {
+  const { rows } = await query(`
+    SELECT n.id, n.id_solicitud, n.fecha_respuesta,
+           s.urgencia, ts.codigo AS tipo_sangre
+    FROM notificaciones n
+    JOIN solicitudes s ON n.id_solicitud = s.id
+    JOIN tipos_sangre ts ON s.id_tipo_sangre = ts.id
+    WHERE s.id_hospital = $1 AND s.estado = 'activa' AND n.estado = 'confirmada'
+    ORDER BY n.fecha_respuesta ASC
+  `, [idHospital]);
   return rows;
 }
 

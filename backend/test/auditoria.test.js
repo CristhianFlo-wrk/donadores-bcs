@@ -121,30 +121,39 @@ describe('endpoints /api/auditoria', () => {
     assert.ok(res.body.entradas[0].hospital_nombre);
   });
 
-  it('admin verifica y consulta historial por hash y estado global', async () => {
-    const verificar = await request(app).get('/api/auditoria/verificar/' + hashDonante).set(bearer(tokenAdmin));
-    assert.equal(verificar.status, 200);
-    assert.equal(verificar.body.verificacion.integra, true);
-
-    const historial = await request(app).get('/api/auditoria/historial/' + hashDonante).set(bearer(tokenAdmin));
-    assert.equal(historial.body.total, 5);
-
+  it('el estado global verifica las dos cadenas completas', async () => {
     const estado = await request(app).get('/api/auditoria/estado').set(bearer(tokenAdmin));
     assert.equal(estado.body.estado.total_donaciones, 5);
     assert.equal(estado.body.estado.donantes_con_historial, 1);
     assert.ok(estado.body.estado.total_logs > 0);
+    assert.equal(estado.body.estado.verificacion_donaciones.integra, true);
+    assert.equal(estado.body.estado.verificacion_logs.integra, true);
+  });
+
+  it('el estado global detecta una donacion o un log alterados', async () => {
+    const { rows } = await query('SELECT id, id_hospital FROM historial_donaciones ORDER BY id LIMIT 1');
+    await query('UPDATE historial_donaciones SET id_hospital = 2 WHERE id = $1', [rows[0].id]);
+    await query("UPDATE auditoria_logs SET accion = 'OTRA' WHERE id = 1");
+
+    const { estado } = (await request(app).get('/api/auditoria/estado').set(bearer(tokenAdmin))).body;
+    assert.equal(estado.verificacion_donaciones.integra, false);
+    assert.equal(estado.verificacion_donaciones.id_roto, rows[0].id);
+    assert.equal(estado.verificacion_logs.integra, false);
+
+    await query('UPDATE historial_donaciones SET id_hospital = $1 WHERE id = $2', [rows[0].id_hospital, rows[0].id]);
+    await query("UPDATE auditoria_logs SET accion = 'REGISTRO_DONANTE' WHERE id = 1");
   });
 
   it('hospitales y donantes no acceden a los endpoints de admin', async () => {
     for (const token of [tokenHospital, donante.token]) {
       assert.equal((await request(app).get('/api/auditoria/estado').set(bearer(token))).status, 403);
-      assert.equal((await request(app).get('/api/auditoria/verificar/' + hashDonante).set(bearer(token))).status, 403);
     }
     assert.equal((await request(app).get('/api/auditoria/mi-historial').set(bearer(tokenHospital))).status, 403);
   });
 
-  it('400 con hash mal formado y sin endpoint de registro', async () => {
-    assert.equal((await request(app).get('/api/auditoria/verificar/abc').set(bearer(tokenAdmin))).status, 400);
+  it('no hay endpoints de consulta por hash ni de registro', async () => {
+    assert.equal((await request(app).get('/api/auditoria/verificar/' + hashDonante).set(bearer(tokenAdmin))).status, 404);
+    assert.equal((await request(app).get('/api/auditoria/historial/' + hashDonante).set(bearer(tokenAdmin))).status, 404);
     assert.equal((await request(app).post('/api/auditoria/registrar').set(bearer(tokenAdmin)).send({})).status, 404);
   });
 });

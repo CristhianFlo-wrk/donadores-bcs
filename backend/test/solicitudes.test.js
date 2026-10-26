@@ -105,7 +105,8 @@ describe('GET /api/solicitudes/:id/candidatos', () => {
     const res = await request(app).get('/api/solicitudes/1/candidatos').set(bearer(tokenHospital1));
     assert.equal(res.status, 200);
     assert.equal(res.body.tipo_sangre_requerido, 'O+');
-    assert.ok(res.body.candidatos.some((c) => c.id_donante === donante.id_donante));
+    assert.ok(res.body.total_candidatos > 0);
+    assert.ok(res.body.candidatos.every((c) => c.id_donante === undefined));
   });
 
   it('403 para otro hospital y para donantes', async () => {

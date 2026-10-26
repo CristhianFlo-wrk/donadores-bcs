@@ -37,13 +37,14 @@ describe('rendimiento con carga de donantes', () => {
     assert.ok(await contarFilas('donantes') >= 100);
   });
 
-  it('GET /api/donantes/compatibles responde en menos de 3 segundos', async () => {
+  it('GET /api/solicitudes/:id/candidatos responde en menos de 3 segundos', async () => {
+    const solicitud = await request(app).post('/api/solicitudes').set(bearer(tokenHospital)).send({ id_tipo_sangre: 8, urgencia: 'urgente' });
     const inicio = performance.now();
-    const res = await request(app).get('/api/donantes/compatibles/8?limite=100').set(bearer(tokenHospital));
+    const res = await request(app).get(`/api/solicitudes/${solicitud.body.solicitud.id}/candidatos?limite=100`).set(bearer(tokenHospital));
     const duracion = performance.now() - inicio;
 
     assert.equal(res.status, 200);
-    assert.equal(res.body.total, 100);
+    assert.equal(res.body.total_candidatos, 100);
     assert.ok(duracion < LIMITE_MS, 'tardo ' + Math.round(duracion) + ' ms');
   });
 

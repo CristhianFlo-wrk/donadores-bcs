@@ -4,6 +4,7 @@ import request from 'supertest';
 import { app } from '../src/index.js';
 import { cerrarPool, query } from '../src/config/database.js';
 import { verificarLogs } from '../src/modules/auditoria/auditoria.service.js';
+import { buscarCompatibles } from '../src/modules/donantes/donantes.service.js';
 import { prepararBaseDatos, crearDonante, loginDemo, idColonia } from './helpers.js';
 
 const bearer = (token) => ({ Authorization: 'Bearer ' + token });
@@ -15,6 +16,11 @@ let tokenHospital1;
 let tokenHospital2;
 let tokenAdmin;
 let idSolicitud;
+
+// La respuesta de notificar no trae id_donante: se busca en la base a quien se aviso
+const donantesAvisados = (res) =>
+  query('SELECT id_donante FROM notificaciones WHERE id = ANY($1::int[])', [res.body.notificaciones.map((n) => n.id)])
+    .then((r) => r.rows.map((f) => f.id_donante));
 
 const notificacionDe = (idDonante) =>
   query('SELECT * FROM notificaciones WHERE id_solicitud = $1 AND id_donante = $2', [idSolicitud, idDonante]).then((r) => r.rows[0]);
@@ -44,8 +50,9 @@ describe('POST /api/notificaciones/notificar', () => {
     const res = await request(app).post('/api/notificaciones/notificar').set(bearer(tokenHospital1)).send({ id_solicitud: idSolicitud });
     assert.equal(res.status, 200);
     assert.equal(res.body.alcance, 'sur');
-    const ids = res.body.notificaciones.map((n) => n.id_donante).sort();
+    const ids = (await donantesAvisados(res)).sort();
     assert.deepEqual(ids, [donanteSur.id_donante, donanteSur2.id_donante].sort());
+    assert.ok(res.body.notificaciones.every((n) => n.id_donante === undefined));
     assert.ok(res.body.notificaciones.every((n) => n.modo === 'simulado' && n.sms === 'simulado'));
   });
 
@@ -55,7 +62,7 @@ describe('POST /api/notificaciones/notificar', () => {
 
     const todas = await request(app).post('/api/notificaciones/notificar').set(bearer(tokenAdmin))
       .send({ id_solicitud: idSolicitud, todas_las_regiones: true });
-    assert.deepEqual(todas.body.notificaciones.map((n) => n.id_donante), [donanteCentro.id_donante]);
+    assert.deepEqual(await donantesAvisados(todas), [donanteCentro.id_donante]);
   });
 
   it('valida el body', async () => {
@@ -69,7 +76,7 @@ describe('POST /api/notificaciones/notificar', () => {
     const critica = await request(app).post('/api/solicitudes').set(bearer(tokenHospital1)).send({ id_tipo_sangre: 1, urgencia: 'critica' });
     const res = await request(app).post('/api/notificaciones/notificar').set(bearer(tokenHospital1)).send({ id_solicitud: critica.body.solicitud.id });
     assert.equal(res.body.alcance, 'todas');
-    const ids = res.body.notificaciones.map((n) => n.id_donante);
+    const ids = await donantesAvisados(res);
     assert.ok(ids.includes(donanteCentro.id_donante));
     assert.ok(ids.includes(donanteSur.id_donante));
     await request(app).patch(`/api/solicitudes/${critica.body.solicitud.id}/cerrar`).set(bearer(tokenHospital1)).send({ estado: 'cancelada' });
@@ -112,6 +119,23 @@ describe('donante: mis-notificaciones y responder', () => {
     );
     assert.deepEqual(rows.map((r) => r.accion), ['ASISTENCIA_CONFIRMADA', 'ASISTENCIA_RECHAZADA']);
     assert.equal(rows[0].id_usuario, donanteSur.id_usuario);
+  });
+
+  it('el hospital ve las confirmaciones de sus solicitudes activas sin datos del donante', async () => {
+    const confirmada = await notificacionDe(donanteSur.id_donante);
+    const res = await request(app).get('/api/notificaciones/confirmadas').set(bearer(tokenHospital1));
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.notificaciones.map((n) => n.id), [confirmada.id]);
+    assert.equal(res.body.notificaciones[0].tipo_sangre, 'O+');
+    assert.equal(res.body.notificaciones[0].id_donante, undefined);
+
+    assert.equal((await request(app).get('/api/notificaciones/confirmadas').set(bearer(tokenHospital2))).body.total, 0);
+    assert.equal((await request(app).get('/api/notificaciones/confirmadas').set(bearer(donanteSur.token))).status, 403);
+
+    // El detalle de la solicitud tampoco expone al donante
+    const detalle = await request(app).get(`/api/solicitudes/${idSolicitud}`).set(bearer(tokenHospital1));
+    assert.ok(detalle.body.solicitud.notificaciones.length > 0);
+    assert.ok(detalle.body.solicitud.notificaciones.every((n) => n.id_donante === undefined));
   });
 
   it('hospitales no usan endpoints de donante', async () => {
@@ -160,8 +184,9 @@ describe('PATCH /api/notificaciones/:id/donacion', () => {
   });
 
   it('el donante que acaba de donar ya no aparece como candidato', async () => {
-    const res = await request(app).get(`/api/solicitudes/${idSolicitud}/candidatos?region=sur`).set(bearer(tokenHospital1));
-    assert.ok(!res.body.candidatos.some((c) => c.id_donante === donanteSur.id_donante));
+    const candidatos = await buscarCompatibles(2, { region: 'sur' });
+    assert.ok(candidatos.length > 0);
+    assert.ok(!candidatos.some((c) => c.id_donante === donanteSur.id_donante));
   });
 
   it('bloquea una segunda donacion antes de 90 dias en otra solicitud', async () => {
@@ -225,5 +250,22 @@ describe('GET /api/auditoria/notificacion/:id', () => {
     assert.equal((await request(app).get(`/api/auditoria/notificacion/${donada.id}`).set(bearer(tokenHospital2))).status, 403);
     assert.equal((await request(app).get(`/api/auditoria/notificacion/${donada.id}`).set(bearer(donanteSur.token))).status, 403);
     assert.equal((await request(app).get('/api/auditoria/notificacion/9999').set(bearer(tokenHospital1))).status, 404);
+  });
+});
+
+describe('volver a notificar', () => {
+  it('avisa a los compatibles que faltan en lugar de repetir los mismos', async () => {
+    // Aptos O-/O+ del sur en este punto: donanteSur2 y estos dos (donanteSur ya dono)
+    await crearDonante(app, request, { id_tipo_sangre: 1 });
+    await crearDonante(app, request, { id_tipo_sangre: 2 });
+    const nueva = await request(app).post('/api/solicitudes').set(bearer(tokenHospital1)).send({ id_tipo_sangre: 2, urgencia: 'urgente' });
+    const idNueva = nueva.body.solicitud.id;
+
+    const enviadas = [];
+    for (let i = 0; i < 4; i++) {
+      const res = await request(app).post('/api/notificaciones/notificar').set(bearer(tokenHospital1)).send({ id_solicitud: idNueva, limite: 1 });
+      enviadas.push(res.body.notificaciones_enviadas);
+    }
+    assert.deepEqual(enviadas, [1, 1, 1, 0]);
   });
 });

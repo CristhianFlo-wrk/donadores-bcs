@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import request from 'supertest';
 import { app } from '../src/index.js';
 import { cerrarPool, query } from '../src/config/database.js';
+import { buscarCompatibles } from '../src/modules/donantes/donantes.service.js';
 import { prepararBaseDatos, crearDonante, loginDemo, idColonia } from './helpers.js';
 
 const bearer = (token) => ({ Authorization: 'Bearer ' + token });
@@ -104,7 +105,7 @@ describe('PATCH /api/donantes/disponibilidad', () => {
   });
 });
 
-describe('GET /api/donantes/compatibles/:idTipoSangre', () => {
+describe('buscarCompatibles', () => {
   let abPositivo;
   let noDisponible;
   let donoReciente;
@@ -118,46 +119,39 @@ describe('GET /api/donantes/compatibles/:idTipoSangre', () => {
     await query("UPDATE donantes SET ultima_donacion = NOW() - INTERVAL '10 days' WHERE id = $1", [donoReciente.id_donante]);
   });
 
-  it('solo hospital y admin pueden buscar', async () => {
-    assert.equal((await request(app).get('/api/donantes/compatibles/4').set(bearer(donante.token))).status, 403);
-    assert.equal((await request(app).get('/api/donantes/compatibles/4').set(bearer(tokenAdmin))).status, 200);
+  it('ya no existe un endpoint para listar donantes fuera de una solicitud', async () => {
+    assert.equal((await request(app).get('/api/donantes/compatibles/4').set(bearer(tokenHospital))).status, 404);
   });
 
   it('para A+ devuelve O- y A+ aptos, sin AB+, sin no disponibles ni donacion reciente', async () => {
-    const res = await request(app).get('/api/donantes/compatibles/4').set(bearer(tokenHospital));
-    assert.equal(res.status, 200);
-    const ids = res.body.donantes.map((d) => d.id_donante);
+    const compatibles = await buscarCompatibles(4);
+    const ids = compatibles.map((d) => d.id_donante);
     assert.ok(ids.includes(donante.id_donante));
     assert.ok(!ids.includes(abPositivo.id_donante));
     assert.ok(!ids.includes(noDisponible.id_donante));
     assert.ok(!ids.includes(donoReciente.id_donante));
-    assert.equal(res.body.donantes[0].tipo_sangre, 'O-');
+    assert.equal(compatibles[0].tipo_sangre, 'O-');
   });
 
-  it('no expone datos identificables', async () => {
-    const res = await request(app).get('/api/donantes/compatibles/1').set(bearer(tokenHospital));
-    const fila = res.body.donantes[0];
+  it('no devuelve datos identificables', async () => {
+    const [fila] = await buscarCompatibles(1);
     for (const campo of ['curp_hash', 'nombre_cifrado', 'nombre_parcial', 'telefono_cifrado', 'latitud', 'longitud']) {
       assert.equal(fila[campo], undefined, campo);
     }
   });
 
   it('filtros: solo_aptos=false, solo_disponibles=false y region', async () => {
-    const todos = await request(app).get('/api/donantes/compatibles/4?solo_aptos=false&solo_disponibles=false').set(bearer(tokenHospital));
-    const ids = todos.body.donantes.map((d) => d.id_donante);
+    const ids = (await buscarCompatibles(4, { soloAptos: false, soloDisponibles: false })).map((d) => d.id_donante);
     assert.ok(ids.includes(noDisponible.id_donante));
     assert.ok(ids.includes(donoReciente.id_donante));
 
-    const centro = await request(app).get('/api/donantes/compatibles/4?solo_aptos=false&region=centro').set(bearer(tokenHospital));
-    assert.deepEqual(centro.body.donantes.map((d) => d.id_donante), [donoReciente.id_donante]);
+    const centro = await buscarCompatibles(4, { soloAptos: false, region: 'centro' });
+    assert.deepEqual(centro.map((d) => d.id_donante), [donoReciente.id_donante]);
   });
 
-  it('limite con tope y validaciones', async () => {
-    const res = await request(app).get('/api/donantes/compatibles/8?limite=1').set(bearer(tokenHospital));
-    assert.equal(res.body.total, 1);
-    assert.equal((await request(app).get('/api/donantes/compatibles/8?limite=-3').set(bearer(tokenHospital))).status, 400);
-    assert.equal((await request(app).get('/api/donantes/compatibles/8?region=este').set(bearer(tokenHospital))).status, 400);
-    assert.equal((await request(app).get('/api/donantes/compatibles/99').set(bearer(tokenHospital))).status, 404);
+  it('respeta el limite y rechaza un tipo inexistente', async () => {
+    assert.equal((await buscarCompatibles(8, { limite: 1 })).length, 1);
+    await assert.rejects(buscarCompatibles(99), { status: 404 });
   });
 });
 

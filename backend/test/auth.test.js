@@ -58,13 +58,14 @@ describe('POST /api/auth/registro', () => {
   it('rechaza email duplicado (sin importar mayusculas)', async () => {
     const res = await registrar(donante({ email: 'JUAN.PEREZ@example.com', curp: 'PELJ950520HBSRPN02' }));
     assert.equal(res.status, 400);
-    assert.equal(res.body.error, 'El email ya esta registrado');
+    assert.equal(res.body.error, 'El email o CURP ya esta registrado');
   });
 
   it('rechaza CURP duplicado (sin importar mayusculas)', async () => {
     const res = await registrar(donante({ email: 'otro@example.com', curp: 'pelj950520hbsrpn01' }));
     assert.equal(res.status, 400);
-    assert.equal(res.body.error, 'El CURP ya esta registrado');
+    // Mismo mensaje que el email repetido: no revela que la CURP ya es de un donante
+    assert.equal(res.body.error, 'El email o CURP ya esta registrado');
   });
 
   it('valida campos obligatorios, CURP, edad, sexo y peso', async () => {

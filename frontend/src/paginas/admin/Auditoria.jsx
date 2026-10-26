@@ -32,8 +32,8 @@ export default function Auditoria() {
             <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
               <div className="min-w-0 space-y-6">
                 <section aria-labelledby="titulo-cadena" className="rounded-xl bg-gray-950 p-5 text-white">
-                  <h2 id="titulo-cadena" className="flex items-center gap-2 text-sm font-semibold text-emerald-400">
-                    <ShieldCheck className="size-4" aria-hidden="true" />
+                  <h2 id="titulo-cadena" className="flex items-center gap-2 text-sm font-semibold text-gray-300">
+                    <ShieldCheck className="size-4 text-gray-400" aria-hidden="true" />
                     Último hash de la bitácora
                   </h2>
                   <p className="mt-3 break-all rounded-lg bg-white/5 px-3 py-2 font-mono text-xs text-gray-300">{estado.ultimo_hash_logs || 'Sin registros'}</p>

@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { Link } from 'react-router';
 import { donantes } from '../../api/servicios.js';
 import { useConsulta } from '../../hooks/useConsulta.js';
 import { EncabezadoPagina, FichaSangre, Panel, TituloSeccion } from '../../componentes/ui.jsx';
 import TablaCompatibilidad from '../../componentes/TablaCompatibilidad.jsx';
-import { PUEDE_DONAR_A } from '../../utils/compatibilidad.js';
+import { PUEDE_DONAR_A, TIPOS_SANGRE, puedeRecibirDe } from '../../utils/compatibilidad.js';
 import { fecha } from '../../utils/formato.js';
 
 
@@ -56,6 +57,61 @@ function ListaPasos({ pasos, columnas }) {
   );
 }
 
+// Arranca en el tipo del donante; elegir otro sirve para consultar a familiares o conocidos
+function GuiaCompatibilidad({ tipoPropio }) {
+  const [elegido, setElegido] = useState(null);
+  const tipo = elegido || tipoPropio || 'A+';
+  const receptores = PUEDE_DONAR_A[tipo];
+
+  return (
+    <section aria-labelledby="titulo-compatibilidad" className="mt-8">
+      <TituloSeccion id="titulo-compatibilidad">A quién puede ayudar tu sangre</TituloSeccion>
+      <p className="-mt-1 mb-3 text-sm text-gray-600">
+        Compatibilidad de glóbulos rojos por grupo ABO y factor Rh. Elige un tipo para ver su fila resaltada. El hospital confirma con pruebas de laboratorio antes de cada transfusión.
+      </p>
+      <div className="space-y-4">
+        <div className="grid grid-cols-4 gap-2 md:grid-cols-8" role="radiogroup" aria-label="Tipo de sangre">
+          {TIPOS_SANGRE.map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="radio"
+              aria-checked={tipo === t}
+              onClick={() => setElegido(t)}
+              className={'flex flex-col items-center rounded-lg py-3 text-center text-lg font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento-600 ' +
+                (tipo === t ? 'bg-red-50 text-red-700 ring-2 ring-inset ring-red-600' : 'bg-white text-gray-800 ring-1 ring-inset ring-gray-200 hover:bg-gray-50')}
+            >
+              {t}
+              {t === tipoPropio && <span className="text-xs font-medium text-gray-600">Tu tipo</span>}
+            </button>
+          ))}
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Panel titulo={'Un donante ' + tipo + ' puede donar a'}>
+            <div key={tipo} className="flex animate-aparecer flex-wrap gap-1.5 motion-reduce:animate-none">
+              {receptores.map((t) => <FichaSangre key={t} tipo={t} tamano="md" />)}
+            </div>
+            <p className="mt-3 text-sm text-gray-700">
+              {receptores.length === TIPOS_SANGRE.length
+                ? 'Sirve a pacientes de cualquier tipo.'
+                : receptores.length === 1
+                  ? 'Solo a pacientes de su mismo tipo.'
+                  : 'Sirve a pacientes de ' + receptores.length + ' tipos.'}
+            </p>
+          </Panel>
+          <Panel titulo={'Un paciente ' + tipo + ' puede recibir de'}>
+            <div key={tipo} className="flex animate-aparecer flex-wrap gap-1.5 motion-reduce:animate-none">
+              {puedeRecibirDe(tipo).map((t) => <FichaSangre key={t} tipo={t} tamano="md" />)}
+            </div>
+          </Panel>
+        </div>
+        <TablaCompatibilidad resaltar={tipo} modo="donante" />
+      </div>
+    </section>
+  );
+}
+
+// En celular y tablet "Tu situacion" va antes del contenido largo; en escritorio queda en la columna lateral
 export default function AntesDeDonar() {
   const consultaPerfil = useConsulta(() => donantes.perfil());
   const consultaStats = useConsulta(() => donantes.stats());
@@ -71,32 +127,25 @@ export default function AntesDeDonar() {
 
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
-          <section aria-labelledby="titulo-requisitos">
-            <TituloSeccion id="titulo-requisitos">Requisitos</TituloSeccion>
-            <dl className="grid gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-200 sm:grid-cols-2 2xl:grid-cols-4">
+          <Panel titulo="Requisitos" className="overflow-hidden" cuerpo="">
+            <dl className="grid gap-px bg-gray-100 sm:grid-cols-2 2xl:grid-cols-4">
               {REQUISITOS.map((r) => (
-                <div key={r.tema} className="bg-white p-4">
+                <div key={r.tema} className="bg-white px-5 py-4">
                   <dt className="text-sm font-semibold text-gray-900">{r.tema}</dt>
                   <dd className="mt-1 text-sm text-gray-700">{r.detalle}</dd>
                 </div>
               ))}
             </dl>
-          </section>
+          </Panel>
 
-          <Panel titulo="El día de la donación" className="mt-8 overflow-hidden" cuerpo="">
+          <Panel titulo="El día de la donación" className="mt-6 overflow-hidden" cuerpo="">
             <ListaPasos pasos={DIA_DE_LA_DONACION} columnas="2xl:grid-cols-3" />
           </Panel>
           <Panel titulo="Después de donar" className="mt-6 overflow-hidden" cuerpo="">
             <ListaPasos pasos={DESPUES_DE_DONAR} columnas="2xl:grid-cols-4" />
           </Panel>
 
-          <section aria-labelledby="titulo-compatibilidad" className="mt-8">
-            <TituloSeccion id="titulo-compatibilidad">A quién puede ayudar tu sangre</TituloSeccion>
-            <p className="-mt-1 mb-3 text-sm text-gray-600">
-              Compatibilidad de glóbulos rojos por grupo ABO y factor Rh. {tipo && 'Tu fila está resaltada.'} El hospital confirma con pruebas de laboratorio antes de cada transfusión.
-            </p>
-            <TablaCompatibilidad resaltar={tipo} modo="donante" />
-          </section>
+          <GuiaCompatibilidad tipoPropio={tipo} />
 
           <p className="mt-6 text-xs text-gray-600">
             Fuentes:{' '}
@@ -109,7 +158,7 @@ export default function AntesDeDonar() {
           </p>
         </div>
 
-        <aside className="space-y-4 xl:sticky xl:top-8">
+        <aside className="order-first space-y-4 md:grid md:grid-cols-2 md:gap-4 md:space-y-0 xl:sticky xl:top-8 xl:order-none xl:block xl:space-y-4">
           <Panel titulo="Tu situación">
             {tipo ? (
               <div className="flex items-center gap-3">

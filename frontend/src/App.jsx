@@ -17,7 +17,6 @@ import Resumen from './paginas/panel/Resumen.jsx';
 import Solicitudes from './paginas/panel/Solicitudes.jsx';
 import NuevaSolicitud from './paginas/panel/NuevaSolicitud.jsx';
 import DetalleSolicitud from './paginas/panel/DetalleSolicitud.jsx';
-import Compatibilidad from './paginas/panel/Compatibilidad.jsx';
 import Usuarios from './paginas/admin/Usuarios.jsx';
 import Auditoria from './paginas/admin/Auditoria.jsx';
 
@@ -30,22 +29,21 @@ function Raiz() {
 
 function NoEncontrado() {
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-2 px-4 text-center">
-      <p className="text-5xl font-bold text-red-600">404</p>
-      <h1 className="text-lg font-semibold text-gray-900">Esta página no existe</h1>
-      <Link to="/" className="mt-2 text-sm font-semibold text-red-600 hover:underline">Volver al inicio</Link>
+    <div className="tono-rojo flex min-h-dvh flex-col items-center justify-center gap-2 bg-fondo px-4 text-center">
+      <p className="font-display text-5xl font-bold tabular-nums text-red-700">404</p>
+      <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight text-balance text-gray-900">Esta página no existe</h1>
+      <Link to="/" className="mt-2 rounded text-sm font-semibold text-red-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">Volver al inicio</Link>
     </div>
   );
 }
 
-// Las pantallas de solicitudes y la guia de compatibilidad se comparten entre hospital y admin
+// Las pantallas de solicitudes se comparten entre hospital y admin
 function rutasSolicitudes() {
   return (
     <>
       <Route path="solicitudes" element={<Solicitudes />} />
       <Route path="solicitudes/nueva" element={<NuevaSolicitud />} />
       <Route path="solicitudes/:id" element={<DetalleSolicitud />} />
-      <Route path="compatibilidad" element={<Compatibilidad />} />
     </>
   );
 }
@@ -71,8 +69,7 @@ function Rutas() {
           <Route index element={<Inicio />} />
           <Route path="alertas" element={<Alertas />} />
           <Route path="historial" element={<Historial />} />
-          <Route path="antes-de-donar" element={<AntesDeDonar />} />
-          <Route path="perfil" element={<Perfil />} />
+          <Route path="antes-de-donar" element={<AntesDeDonar />} />          <Route path="perfil" element={<Perfil />} />
         </Route>
       </Route>
 

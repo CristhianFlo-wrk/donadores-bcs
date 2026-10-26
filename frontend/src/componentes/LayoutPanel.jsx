@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router';
-import { BookOpen, ClipboardList, LayoutDashboard, ShieldCheck, Users } from 'lucide-react';
+import { ClipboardList, LayoutDashboard, ShieldCheck, Users } from 'lucide-react';
 import { useSesion } from '../contexto/SesionContext.jsx';
 import { hospitales } from '../api/servicios.js';
 import { useConsulta } from '../hooks/useConsulta.js';
@@ -8,15 +8,13 @@ import MarcoApp from './MarcoApp.jsx';
 const SECCIONES = {
   hospital: [
     { ruta: '/hospital', texto: 'Resumen', Icono: LayoutDashboard, exacta: true },
-    { ruta: '/hospital/solicitudes', texto: 'Solicitudes', Icono: ClipboardList },
-    { ruta: '/hospital/compatibilidad', texto: 'Compatibilidad', textoCorto: 'Guía', Icono: BookOpen }
+    { ruta: '/hospital/solicitudes', texto: 'Solicitudes', Icono: ClipboardList }
   ],
   admin: [
     { ruta: '/admin', texto: 'Resumen', Icono: LayoutDashboard, exacta: true },
     { ruta: '/admin/solicitudes', texto: 'Solicitudes', Icono: ClipboardList },
     { ruta: '/admin/usuarios', texto: 'Usuarios', Icono: Users },
-    { ruta: '/admin/auditoria', texto: 'Auditoría', Icono: ShieldCheck },
-    { ruta: '/admin/compatibilidad', texto: 'Compatibilidad', textoCorto: 'Guía', Icono: BookOpen }
+    { ruta: '/admin/auditoria', texto: 'Auditoría', Icono: ShieldCheck }
   ]
 };
 

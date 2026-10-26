@@ -6,7 +6,7 @@ import { useConsulta } from '../../hooks/useConsulta.js';
 import { useSesion } from '../../contexto/SesionContext.jsx';
 import { Aviso, BarraProgreso, BloqueProtagonista, Boton, Cargando, EncabezadoPagina, EnlaceBoton, EstadoConsulta, FichaSangre, Panel, Punto, TiraMetricas, Vacio } from '../../componentes/ui.jsx';
 import { BadgeUrgencia } from '../../componentes/insignias.jsx';
-import { codigoAsistencia, fechaHora, hace } from '../../utils/formato.js';
+import { COLOR_REGION, codigoAsistencia, fechaHora, hace } from '../../utils/formato.js';
 
 const MAXIMO_ACTIVAS = 6;
 
@@ -68,7 +68,7 @@ export default function Resumen() {
                 <SolicitudesAtendidas lista={dashboard.solicitudes_atendidas} base={base} esAdmin={esAdmin} />
               </div>
 
-              <div className="space-y-6">
+              <div className={'space-y-6 ' + (esAdmin ? 'order-first xl:order-none' : '')}>
                 <TiraMetricas
                   columnas="sm:grid-cols-4 xl:grid-cols-2"
                   metricas={[
@@ -86,8 +86,8 @@ export default function Resumen() {
                   <dl className="grid grid-cols-3 divide-x divide-gray-100">
                     {['norte', 'centro', 'sur'].map((region) => (
                       <div key={region} className="px-4 py-4">
-                        <dt className="text-sm capitalize text-gray-600">{region}</dt>
-                        <dd className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">
+                        <dt className="flex items-center gap-1.5 text-sm capitalize text-gray-600"><Punto color={COLOR_REGION[region]} />{region}</dt>
+                        <dd className="mt-1 font-display text-2xl font-bold tabular-nums text-gray-900">
                           {dashboard.donantes.por_region.find((r) => r.region === region)?.total || 0}
                         </dd>
                       </div>
@@ -103,7 +103,7 @@ export default function Resumen() {
                     ].map(([etiqueta, valor]) => (
                       <div key={etiqueta} className="px-4 py-4">
                         <dt className="text-sm text-gray-600">{etiqueta}</dt>
-                        <dd className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">{valor}</dd>
+                        <dd className="mt-1 font-display text-2xl font-bold tabular-nums text-gray-900">{valor}</dd>
                       </div>
                     ))}
                   </dl>
@@ -242,10 +242,10 @@ function SolicitudesActivas({ consulta, base, esAdmin }) {
                   </span>
                   <span className="justify-self-end @3xl:justify-self-start"><BadgeUrgencia urgencia={s.urgencia} /></span>
                   <BarraProgreso valor={s.unidades_donadas} maximo={s.unidades_requeridas} etiqueta={'Unidades obtenidas de la solicitud ' + s.id} className="col-span-2 self-center @3xl:col-span-1" />
-                  <span className="flex items-baseline justify-end gap-1.5 whitespace-nowrap text-sm text-gray-600">
+                  <span className="flex flex-wrap items-baseline justify-end gap-x-1.5 text-sm text-gray-600">
                     <span className="font-display text-2xl font-bold tabular-nums text-gray-900">{s.unidades_donadas}</span>
                     de <span className="tabular-nums">{s.unidades_requeridas}</span>
-                    {completa ? <span className="font-medium text-emerald-700">· completa</span> : null}
+                    {completa ? <span className="basis-full text-right font-medium text-emerald-700">completa</span> : null}
                   </span>
                 </Link>
               </li>
@@ -325,7 +325,7 @@ function DonantesPorTipo({ grupos, solicitados }) {
           const pedido = solicitados.has(g.tipo_sangre);
           return (
             <div key={g.tipo_sangre} className={'-mx-2 grid grid-cols-[2.75rem_minmax(0,1fr)_4.5rem] items-center gap-3 rounded-lg px-2 py-1 text-sm ' + (pedido ? 'bg-red-50' : '')}>
-              <span className={'font-semibold ' + (pedido ? 'text-red-700' : 'text-gray-900')}>{g.tipo_sangre}</span>
+              <FichaSangre tipo={g.tipo_sangre} tamano="sm" className={pedido ? 'bg-white!' : ''} />
               <div className="h-2 overflow-hidden rounded-full bg-acento-50" role="img" aria-label={g.tipo_sangre + ': ' + g.total + ' donantes, ' + g.porcentaje + ' por ciento' + (pedido ? ', con solicitud activa' : '')}>
                 <div className="h-full origin-left animate-llenar rounded-full bg-acento-600 motion-reduce:animate-none" style={{ width: g.porcentaje + '%' }} />
               </div>

@@ -43,7 +43,7 @@ export default function Perfil() {
                 />
               ) : (
                 <div className="rounded-xl border border-gray-200 bg-white">
-                  <dl className="divide-y divide-gray-100 px-5 text-sm">
+                  <dl className="px-5 text-sm 2xl:grid 2xl:grid-cols-2 2xl:gap-x-10">
                     <Dato etiqueta="Teléfono" valor={perfil.telefono || 'Sin registrar'} />
                     <Dato etiqueta="Fecha de nacimiento" valor={fecha(perfil.fecha_nacimiento + 'T12:00:00')} />
                     <Dato etiqueta="Peso" valor={perfil.peso_kg ? perfil.peso_kg + ' kg' : 'Sin registrar'} />
@@ -60,10 +60,10 @@ export default function Perfil() {
             </FilaAjuste>
 
             <FilaAjuste titulo="Aplicación" descripcion="Instálala para abrirla desde tu pantalla de inicio y recibir avisos más rápido.">
-              <TarjetaInstalar sinOpcion={<p className="text-sm text-gray-600">La app ya está instalada o tu navegador no permite instalarla.</p>} />
+              <TarjetaInstalar sinOpcion={<p className="rounded-xl border border-gray-200 bg-white p-5 text-sm text-gray-600">La app ya está instalada o tu navegador no permite instalarla.</p>} />
             </FilaAjuste>
 
-            <FilaAjuste titulo="Sesión" descripcion="Cierra la sesión en este dispositivo.">
+            <FilaAjuste titulo="Sesión" descripcion="Cierra la sesión en este dispositivo." className="lg:hidden">
               <Boton variante="contorno" onClick={cerrarSesion}>
                 <LogOut className="size-4" aria-hidden="true" />
                 Cerrar sesión
@@ -76,21 +76,22 @@ export default function Perfil() {
   );
 }
 
-function FilaAjuste({ titulo, descripcion, children }) {
+// La fila de sesion solo va en celular: en escritorio la barra lateral ya tiene Cerrar sesion
+function FilaAjuste({ titulo, descripcion, className = '', children }) {
   return (
-    <section className="grid gap-4 py-6 first:pt-0 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] lg:gap-10">
+    <section className={'grid gap-4 py-6 first:pt-0 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] lg:gap-10 ' + className}>
       <div>
         <h2 className="text-base font-semibold text-gray-900">{titulo}</h2>
         <p className="mt-1 text-sm text-gray-600">{descripcion}</p>
       </div>
-      <div className="min-w-0 max-w-3xl">{children}</div>
+      <div className="min-w-0 max-w-3xl 2xl:max-w-5xl">{children}</div>
     </section>
   );
 }
 
 function Dato({ etiqueta, valor }) {
   return (
-    <div className="flex justify-between gap-4 py-3">
+    <div className="flex justify-between gap-4 border-t border-gray-100 py-3 first:border-t-0 2xl:nth-2:border-t-0">
       <dt className="text-gray-600">{etiqueta}</dt>
       <dd className="text-right font-medium text-gray-900">{valor}</dd>
     </div>

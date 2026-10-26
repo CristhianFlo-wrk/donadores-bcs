@@ -52,14 +52,14 @@ export default function Usuarios() {
                   <ul className="divide-y divide-gray-100 md:hidden">
                     {usuarios.map((u) => (
                       <li key={u.id} className="px-5 py-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="min-w-0 break-all text-sm font-semibold text-gray-900">{u.email}</p>
+                        <p className="text-sm font-semibold text-gray-900 [overflow-wrap:anywhere]">{u.email}</p>
+                        <div className="mt-2 flex items-center justify-between gap-3">
+                          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600">
+                            <Badge tono={TONO_ROL[u.rol]}>{NOMBRE_ROL[u.rol]}</Badge>
+                            {u.id_hospital && <span>{nombresHospital[u.id_hospital] || '#' + u.id_hospital}</span>}
+                            <span>Alta {fechaCorta(u.created_at)}</span>
+                          </div>
                           <EstadoCuenta usuario={u} esPropia={u.id === yo.id} alCambiar={cambiarActivo} />
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600">
-                          <Badge tono={TONO_ROL[u.rol]}>{NOMBRE_ROL[u.rol]}</Badge>
-                          {u.id_hospital && <span>{nombresHospital[u.id_hospital] || '#' + u.id_hospital}</span>}
-                          <span>Alta {fechaCorta(u.created_at)}</span>
                         </div>
                       </li>
                     ))}
@@ -115,8 +115,8 @@ function EstadoCuenta({ usuario, esPropia, alCambiar }) {
       className="inline-flex shrink-0 items-center gap-2 rounded-lg px-1 py-1 text-xs font-medium text-gray-700 focus-visible:outline-2 focus-visible:outline-acento-600"
       title={usuario.activo ? 'Desactivar cuenta' : 'Activar cuenta'}
     >
-      <span className={'relative h-5 w-9 rounded-full transition-colors ' + (usuario.activo ? 'bg-emerald-600' : 'bg-gray-300')}>
-        <span className={'absolute top-0.5 size-4 rounded-full bg-white transition-[left] ' + (usuario.activo ? 'left-4.5' : 'left-0.5')} />
+      <span className={'relative h-5 w-9 rounded-full transition-colors motion-reduce:transition-none ' + (usuario.activo ? 'bg-emerald-600' : 'bg-gray-300')}>
+        <span className={'absolute top-0.5 size-4 rounded-full bg-white transition-[left] motion-reduce:transition-none ' + (usuario.activo ? 'left-4.5' : 'left-0.5')} />
       </span>
       {usuario.activo ? 'Activa' : 'Inactiva'}
     </button>
@@ -124,6 +124,7 @@ function EstadoCuenta({ usuario, esPropia, alCambiar }) {
 }
 
 // Los donantes se registran solos; aqui solo se crean cuentas de hospital y admin
+// Sin el selector de hospital quedan 3 campos: el rol ocupa toda la fila para no dejar uno suelto
 function FormularioUsuario({ hospitalesLista, alCrear }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -156,10 +157,11 @@ function FormularioUsuario({ hospitalesLista, alCrear }) {
 
   return (
     <Panel titulo="Nueva cuenta" detalle="Solo hospitales y administradores" className="xl:sticky xl:top-8">
-        <form onSubmit={crear} className="space-y-4">
+        <form onSubmit={crear} className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
           <Selector
             etiqueta="Rol"
             id="rol"
+            className={rol === 'admin' ? 'md:col-span-2 xl:col-span-1' : ''}
             value={rol}
             onChange={(e) => setRol(e.target.value)}
             vacio="Selecciona un rol"
@@ -176,8 +178,8 @@ function FormularioUsuario({ hospitalesLista, alCrear }) {
           )}
           <Campo etiqueta="Correo electrónico" id="nuevo-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
           <Campo etiqueta="Contraseña inicial" id="nuevo-password" type="password" autoComplete="new-password" minLength={8} required ayuda="Mínimo 8 caracteres" value={password} onChange={(e) => setPassword(e.target.value)} />
-          {aviso && <Aviso tono={aviso.tono}>{aviso.texto}</Aviso>}
-          <Boton type="submit" cargando={enviando} className="w-full">Crear cuenta</Boton>
+          {aviso && <Aviso tono={aviso.tono} className="md:col-span-2 xl:col-span-1">{aviso.texto}</Aviso>}
+          <Boton type="submit" cargando={enviando} className="w-full md:col-span-2 xl:col-span-1">Crear cuenta</Boton>
         </form>
     </Panel>
   );

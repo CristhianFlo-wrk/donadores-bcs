@@ -28,7 +28,7 @@ export default function MarcoPublico({ titulo, subtitulo, ancho = 'max-w-sm', ch
         <div className="sticky top-0 flex h-dvh flex-col justify-between p-12">
           <Logo claro />
           <div>
-            <h2 className="max-w-md font-display text-4xl font-bold leading-tight tracking-tight text-balance">
+            <h2 className="max-w-md font-display text-4xl font-bold leading-tight tracking-tight text-balance 2xl:max-w-xl 2xl:text-5xl">
               Conectamos a hospitales con donantes compatibles en Baja California Sur
             </h2>
             <ul className="mt-8 space-y-4">
@@ -50,7 +50,7 @@ export default function MarcoPublico({ titulo, subtitulo, ancho = 'max-w-sm', ch
             <Logo />
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-6 sm:p-8">
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900">{titulo}</h1>
+            <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight text-balance text-gray-900">{titulo}</h1>
             {subtitulo && <p className="mt-1 text-sm text-gray-600">{subtitulo}</p>}
             <div className="mt-6">{children}</div>
           </div>

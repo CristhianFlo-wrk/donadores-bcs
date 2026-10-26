@@ -161,7 +161,7 @@ export default function Registro() {
               onChange={cambiar}
               opciones={(consultaTipos.datos?.tipos || []).map((t) => ({ valor: String(t.id), texto: t.codigo }))}
             />
-            {errores.id_tipo_sangre && <p className="mt-1 text-xs text-red-600">{errores.id_tipo_sangre}</p>}
+            {errores.id_tipo_sangre && <p className="mt-1 text-xs text-red-700">{errores.id_tipo_sangre}</p>}
           </div>
           <Campo etiqueta="Peso en kg (opcional)" type="number" inputMode="decimal" min="50" max="300" {...propsCampo('peso_kg')} />
           <Campo etiqueta="Teléfono (opcional)" type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={10} className="sm:col-span-2" ayuda="Para avisos por SMS" {...propsCampo('telefono')} />
@@ -188,7 +188,7 @@ export default function Registro() {
               vacio={formulario.id_municipio ? 'Selecciona tu colonia' : 'Primero elige el municipio'}
               opciones={colonias.map((c) => ({ valor: String(c.id), texto: c.nombre }))}
             />
-            {errores.id_colonia && <p className="mt-1 text-xs text-red-600">{errores.id_colonia}</p>}
+            {errores.id_colonia && <p className="mt-1 text-xs text-red-700">{errores.id_colonia}</p>}
           </div>
           {esOtra && (
             <Campo etiqueta="Nombre de tu colonia" className="sm:col-span-2" {...propsCampo('colonia_personalizada')} />

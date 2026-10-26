@@ -103,11 +103,11 @@ export default function NuevaSolicitud() {
             </fieldset>
           </Panel>
 
-          <div className="grid items-start gap-6 lg:grid-cols-2">
+          <div className="grid items-start gap-6 2xl:grid-cols-2">
             <Panel titulo="Prioridad">
               <fieldset>
                 <legend className="sr-only">Prioridad</legend>
-                <div className="grid gap-2">
+                <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-1">
                   {URGENCIAS.map((u) => (
                     <label
                       key={u.valor}
@@ -181,7 +181,7 @@ export default function NuevaSolicitud() {
               </div>
               <div className="border-t border-gray-100 pt-3">
                 <dt className="text-gray-600">Pueden donar</dt>
-                <dd className="mt-2 flex flex-wrap gap-1.5">
+                <dd key={tipoElegido} className="mt-2 flex animate-aparecer flex-wrap gap-1.5 motion-reduce:animate-none">
                   {tipoElegido
                     ? puedeRecibirDe(tipoElegido).map((t) => <FichaSangre key={t} tipo={t} tamano="sm" />)
                     : <span className="text-gray-500">Elige un tipo para ver los compatibles</span>}

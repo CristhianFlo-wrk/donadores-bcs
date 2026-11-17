@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
-import { ArrowRight, BookOpen, CalendarClock, CircleCheck } from 'lucide-react';
-import { donantes, notificaciones, solicitudes } from '../../api/servicios.js';
+import { Link, useOutletContext } from 'react-router';
+import { ArrowRight, BookOpen, CalendarClock, ChevronRight, CircleCheck, MessageSquareHeart } from 'lucide-react';
+import { donantes, solicitudes } from '../../api/servicios.js';
 import { useConsulta } from '../../hooks/useConsulta.js';
 import { useSesion } from '../../contexto/SesionContext.jsx';
 import { Aviso, Badge, BarraProgreso, BloqueProtagonista, Boton, Cargando, EncabezadoPagina, EnlaceBoton, FichaSangre, Panel, Vacio } from '../../componentes/ui.jsx';
-import { BadgeUrgencia } from '../../componentes/insignias.jsx';
+import { BadgeUrgencia, InsigniasCiudadana, textoUrgencia } from '../../componentes/insignias.jsx';
 import { esCompatible } from '../../utils/compatibilidad.js';
 import { fecha, hace, nombreRegion } from '../../utils/formato.js';
 
@@ -14,7 +14,7 @@ export default function Inicio() {
   const { usuario } = useSesion();
   const consultaPerfil = useConsulta(() => donantes.perfil());
   const consultaStats = useConsulta(() => donantes.stats());
-  const consultaAlertas = useConsulta(() => notificaciones.mias(), [], { intervaloMs: 30000 });
+  const { alertas: consultaAlertas } = useOutletContext();
   const consultaSolicitudes = useConsulta(() => solicitudes.listar({ estado: 'activa' }), [], { intervaloMs: 60000 });
 
   if (consultaPerfil.cargando) return <Cargando />;
@@ -28,7 +28,8 @@ export default function Inicio() {
     (n) => n.estado === 'enviada' && n.solicitud_estado === 'activa'
   );
 
-  const puntaje = (s) => Number(esCompatible(perfil.tipo_sangre, s.tipo_sangre)) * 2 + Number(s.region === perfil.ubicacion.region);
+  // Primero las que cubre su sangre, luego por urgencia (critica, urgente, normal) y despues las de su region
+  const puntaje = (s) => Number(esCompatible(perfil.tipo_sangre, s.tipo_sangre)) * 8 + (PESO_URGENCIA[s.urgencia] || 0) + Number(s.region === perfil.ubicacion.region);
   const listaSolicitudes = [...(consultaSolicitudes.datos?.solicitudes || [])].sort((a, b) => puntaje(b) - puntaje(a));
   const compatibles = listaSolicitudes.filter((s) => esCompatible(perfil.tipo_sangre, s.tipo_sangre)).length;
 
@@ -49,7 +50,7 @@ export default function Inicio() {
         <BloqueProtagonista
           id="titulo-alerta"
           className="mb-6"
-          meta={'Solicitud ' + (alertaPendiente.urgencia === 'critica' ? 'crítica' : 'urgente') + ' · ' + hace(alertaPendiente.fecha_envio)}
+          meta={'Solicitud ' + textoUrgencia(alertaPendiente.urgencia).toLowerCase() + ' · ' + hace(alertaPendiente.fecha_envio)}
           titulo={alertaPendiente.hospital_nombre + ' necesita sangre ' + alertaPendiente.tipo_sangre}
           accion={<EnlaceBoton variante="blanco" to="/donante/alertas" className="w-full px-6 sm:w-auto">Responder</EnlaceBoton>}
         >
@@ -75,30 +76,11 @@ export default function Inicio() {
           ) : listaSolicitudes.length === 0 ? (
             <Vacio titulo="No hay solicitudes activas" className="m-5">Te avisaremos cuando un hospital necesite tu tipo de sangre.</Vacio>
           ) : (
-            <ul className="divide-y divide-gray-100">
-              {listaSolicitudes.map((s) => {
-                const sirve = esCompatible(perfil.tipo_sangre, s.tipo_sangre);
-                const insignias = (
-                  <>
-                    {sirve && <Badge tono="acento">Tu sangre sirve</Badge>}
-                    <BadgeUrgencia urgencia={s.urgencia} />
-                  </>
-                );
-                return (
-                  <li key={s.id} className="flex items-start gap-3 px-5 py-4 sm:items-center sm:gap-4">
-                    <FichaSangre tipo={s.tipo_sangre} tamano="sm" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-gray-900">{s.hospital_nombre}</p>
-                      <p className="mt-0.5 text-xs text-gray-600">
-                        {s.unidades_requeridas} {s.unidades_requeridas === 1 ? 'unidad' : 'unidades'} · {nombreRegion(s.region)} · {hace(s.fecha_solicitud)}
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-1.5 sm:hidden">{insignias}</div>
-                    </div>
-                    <div className="hidden shrink-0 items-center gap-2 sm:flex">{insignias}</div>
-                  </li>
-                );
-              })}
-            </ul>
+            <ListaSolicitudes
+              solicitudes={listaSolicitudes}
+              tipoSangre={perfil.tipo_sangre}
+              puedeOfrecerse={perfil.disponible && Boolean(stats?.puede_donar)}
+            />
           )}
         </Panel>
 
@@ -113,6 +95,80 @@ export default function Inicio() {
           <ArrowRight className="size-4 shrink-0 text-acento-700 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden="true" />
         </Link>
       </div>
+    </>
+  );
+}
+
+const PESO_URGENCIA = { critica: 4, urgente: 2 };
+
+function textoCompartido(s) {
+  const fotos = s.total_imagenes === 1 ? '1 foto' : s.total_imagenes + ' fotos';
+  if (s.tiene_historia && s.total_imagenes > 0) return 'Mensaje y ' + fotos + ' de quien la pidió';
+  return s.tiene_historia ? 'Mensaje de quien la pidió' : fotos + ' de quien la pidió';
+}
+
+// Fondo segun la urgencia; las que cubre su sangre llevan borde y tono mas intenso
+const COLOR_SOLICITUD = {
+  critica: { base: 'bg-red-200', sirve: 'border-red-700 bg-red-300', hover: 'hover:bg-red-400/70' },
+  urgente: { base: 'bg-orange-100', sirve: 'border-orange-600 bg-orange-200', hover: 'hover:bg-orange-300' }
+};
+
+// Cada fila abre la solicitud (mensaje, fotos y el boton para donar)
+function ListaSolicitudes({ solicitudes: lista, tipoSangre, puedeOfrecerse }) {
+  const hayCompatibles = lista.some((s) => esCompatible(tipoSangre, s.tipo_sangre));
+
+  return (
+    <>
+      {hayCompatibles && !puedeOfrecerse && (
+        <Aviso tono="info" className="mx-5 mt-4">Para ofrecerte a una solicitud necesitas estar disponible y haber cumplido el periodo de espera entre donaciones.</Aviso>
+      )}
+      <ul className="divide-y divide-white">
+        {lista.map((s) => {
+          const sirve = esCompatible(tipoSangre, s.tipo_sangre);
+          const color = COLOR_SOLICITUD[s.urgencia] || { base: 'bg-white', sirve: 'border-acento-600', hover: 'hover:bg-gray-50' };
+          const compartio = s.tiene_historia || s.total_imagenes > 0;
+          const insignias = (
+            <>
+              {sirve && <Badge tono="acento">Tu sangre sirve</Badge>}
+              <BadgeUrgencia urgencia={s.urgencia} />
+              <InsigniasCiudadana solicitud={s} />
+            </>
+          );
+          const contenido = (
+            <>
+              <FichaSangre tipo={s.tipo_sangre} tamano="sm" />
+              <div className="min-w-0 flex-1">
+                <p className={'text-sm text-gray-900 ' + (sirve ? 'font-bold' : 'font-semibold')}>{s.hospital_nombre}</p>
+                {s.paciente_nombre && <p className="mt-0.5 text-sm text-gray-800">Para {s.paciente_nombre}</p>}
+                <p className="mt-0.5 text-xs text-gray-700">
+                  {s.unidades_requeridas} {s.unidades_requeridas === 1 ? 'unidad' : 'unidades'} · {nombreRegion(s.region)} · {hace(s.fecha_solicitud)}
+                </p>
+                {compartio && (
+                  <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-gray-800">
+                    <MessageSquareHeart className="size-3.5" aria-hidden="true" />
+                    {textoCompartido(s)}
+                  </p>
+                )}
+                <div className="mt-2 flex flex-wrap gap-1.5 sm:hidden">{insignias}</div>
+              </div>
+              <div className="hidden max-w-[50%] shrink-0 flex-wrap items-center justify-end gap-2 sm:flex">
+                {insignias}
+              </div>
+              <ChevronRight className="size-4 shrink-0 self-center text-gray-600" aria-hidden="true" />
+            </>
+          );
+          return (
+            <li key={s.id}>
+              <Link
+                to={'/donante/solicitud/' + s.id}
+                className={'flex w-full items-start gap-3 border-l-4 px-5 py-4 text-left transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-acento-600 motion-reduce:transition-none sm:items-center sm:gap-4 ' + color.base + ' ' + color.hover + ' ' + (sirve ? color.sirve : 'border-transparent')}
+              >
+                {contenido}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
     </>
   );
 }
@@ -140,7 +196,7 @@ function Bienvenida({ idUsuario, nombre }) {
 
   const pasos = [
     'Mantén tu disponibilidad activa para recibir alertas.',
-    'Cuando un hospital necesite tu tipo de sangre te llegará un aviso aquí y por SMS.',
+    'Cuando un hospital necesite tu tipo de sangre te llegará un aviso aquí.',
     'Confirma tu asistencia y presenta tu código de asistencia en el hospital.'
   ];
 
@@ -267,7 +323,7 @@ function Impacto({ stats }) {
       )}
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-gray-100 pt-3 text-sm">
         <span className="text-gray-600">{etiquetaTotal}</span>
-        <Link to="/donante/historial" className="rounded font-semibold text-acento-700 hover:text-acento-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento-600">
+        <Link to="/donante/historial" className="rounded py-0.5 font-semibold text-acento-700 hover:text-acento-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento-600">
           Ver historial
         </Link>
       </div>

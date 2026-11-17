@@ -8,17 +8,25 @@ export function useConsulta(funcion, dependencias = [], { intervaloMs = 0 } = {}
   const [cargando, setCargando] = useState(true);
   const funcionRef = useRef(funcion);
   funcionRef.current = funcion;
+  const turno = useRef(0);
 
+  // Solo la consulta mas reciente escribe: una respuesta lenta de filtros viejos no pisa a la nueva
   const ejecutar = useCallback(async (silencioso = false) => {
+    const miTurno = ++turno.current;
     if (!silencioso) setCargando(true);
     try {
       const resultado = await funcionRef.current();
+      if (miTurno !== turno.current) return;
       setDatos(resultado);
       setError(null);
     } catch (e) {
-      if (!silencioso) setError(e);
+      // Los datos viejos eran de otros parametros (otro municipio, otro filtro): no se dejan a la vista
+      if (!silencioso && miTurno === turno.current) {
+        setDatos(null);
+        setError(e);
+      }
     } finally {
-      if (!silencioso) setCargando(false);
+      if (miTurno === turno.current) setCargando(false);
     }
   }, []);
 

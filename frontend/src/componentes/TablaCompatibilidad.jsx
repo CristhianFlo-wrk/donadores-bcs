@@ -1,9 +1,11 @@
 import { Check } from 'lucide-react';
 import { PUEDE_DONAR_A, TIPOS_SANGRE } from '../utils/compatibilidad.js';
 
+// La caja recibe foco para desplazar la tabla con el teclado en pantallas angostas;
+// es relative para que los textos sr-only de las celdas no ensanchen la pagina
 export default function TablaCompatibilidad({ resaltar, modo = 'donante' }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+    <div tabIndex={0} role="region" aria-label="Tabla de compatibilidad" className="relative overflow-x-auto rounded-xl border border-gray-200 bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-acento-600">
       <table className="w-full min-w-[520px] text-center text-sm">
         <caption className="sr-only">Compatibilidad de glóbulos rojos: filas donante, columnas receptor</caption>
         <thead>
@@ -32,9 +34,9 @@ export default function TablaCompatibilidad({ resaltar, modo = 'donante' }) {
                   return (
                     <td key={receptor} className={'px-2 py-2 ' + (columnaResaltada ? 'bg-acento-50' : '')}>
                       {compatible ? (
-                        <Check className="mx-auto size-4 text-acento-600" aria-label="Compatible" />
+                        <><Check className="mx-auto size-4 text-acento-600" aria-hidden="true" /><span className="sr-only">Compatible</span></>
                       ) : (
-                        <span className="text-gray-300" aria-label="No compatible">–</span>
+                        <><span className="text-gray-500" aria-hidden="true">–</span><span className="sr-only">No compatible</span></>
                       )}
                     </td>
                   );

@@ -44,8 +44,9 @@ export function hace(valor) {
   return fechaCorta(valor);
 }
 
-export function hashCorto(hash) {
-  return hash ? hash.slice(0, 12) + '...' + hash.slice(-8) : '';
+// Sello para personas: los primeros 16 caracteres en grupos de 4 (52C2-2091-2C91-A826), faciles de leer en voz alta o comparar en papel
+export function selloLegible(hash) {
+  return hash ? hash.slice(0, 16).toUpperCase().match(/.{4}/g).join('-') : '';
 }
 
 // Codigo que el donante muestra en el hospital; es el id de su notificacion

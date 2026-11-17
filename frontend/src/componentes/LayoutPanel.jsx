@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router';
-import { ClipboardList, LayoutDashboard, ShieldCheck, Users } from 'lucide-react';
+import { Building2, ClipboardList, FileCheck, LayoutDashboard, ShieldCheck, Users } from 'lucide-react';
 import { useSesion } from '../contexto/SesionContext.jsx';
 import { hospitales } from '../api/servicios.js';
 import { useConsulta } from '../hooks/useConsulta.js';
@@ -14,11 +14,19 @@ const SECCIONES = {
     { ruta: '/admin', texto: 'Resumen', Icono: LayoutDashboard, exacta: true },
     { ruta: '/admin/solicitudes', texto: 'Solicitudes', Icono: ClipboardList },
     { ruta: '/admin/usuarios', texto: 'Usuarios', Icono: Users },
-    { ruta: '/admin/auditoria', texto: 'Auditoría', Icono: ShieldCheck }
+    { ruta: '/admin/catalogos', texto: 'Catálogos', Icono: Building2 },
+    { ruta: '/admin/auditoria', texto: 'Auditoría', Icono: ShieldCheck },
+    { ruta: '/admin/constancias', texto: 'Constancias', Icono: FileCheck }
+  ],
+  auditor: [
+    { ruta: '/auditor', texto: 'Auditoría', Icono: ShieldCheck, exacta: true },
+    { ruta: '/auditor/constancias', texto: 'Constancias', Icono: FileCheck }
   ]
 };
 
-// Panel web para hospital y admin. El hospital ve el nombre de su hospital como alcance
+const ALCANCE = { admin: 'Administración estatal', auditor: 'Auditoría (solo lectura)' };
+
+// Panel web para hospital, admin y auditor. El hospital ve el nombre de su hospital como alcance
 export default function LayoutPanel() {
   const { usuario, cerrarSesion } = useSesion();
   const esHospital = usuario.rol === 'hospital';
@@ -27,7 +35,7 @@ export default function LayoutPanel() {
     [usuario.id_hospital]
   );
 
-  const alcance = esHospital ? consultaHospital.datos?.hospital?.nombre || 'Panel hospitalario' : 'Administración estatal';
+  const alcance = esHospital ? consultaHospital.datos?.hospital?.nombre || 'Panel hospitalario' : ALCANCE[usuario.rol];
 
   return (
     <MarcoApp tono="azul" alcance={alcance} secciones={SECCIONES[usuario.rol]} correo={usuario.email} alSalir={cerrarSesion}>

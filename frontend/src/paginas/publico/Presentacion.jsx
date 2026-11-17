@@ -162,7 +162,10 @@ export default function Presentacion() {
       <footer className="border-t border-gray-200 bg-white">
         <div className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-6 text-xs text-gray-600 sm:flex-row sm:justify-between">
           <p>Donadores BCS • Baja California Sur</p>
-          <p>Proyecto de Ingeniería en Desarrollo de Software, UABCS</p>
+          <p>
+            Proyecto de Ingeniería en Desarrollo de Software, UABCS ·{' '}
+            <Link to="/privacidad" className="underline hover:text-gray-900">Aviso de privacidad</Link>
+          </p>
         </div>
       </footer>
     </div>

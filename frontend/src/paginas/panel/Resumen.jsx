@@ -5,7 +5,8 @@ import { hospitales, notificaciones, reportes, solicitudes } from '../../api/ser
 import { useConsulta } from '../../hooks/useConsulta.js';
 import { useSesion } from '../../contexto/SesionContext.jsx';
 import { Aviso, BarraProgreso, BloqueProtagonista, Boton, Cargando, EncabezadoPagina, EnlaceBoton, EstadoConsulta, FichaSangre, Panel, Punto, TiraMetricas, Vacio } from '../../componentes/ui.jsx';
-import { BadgeUrgencia } from '../../componentes/insignias.jsx';
+import { BadgeUrgencia, InsigniasCiudadana, textoUrgencia } from '../../componentes/insignias.jsx';
+import DialogoDonacion from '../../componentes/DialogoDonacion.jsx';
 import { COLOR_REGION, codigoAsistencia, fechaHora, hace } from '../../utils/formato.js';
 
 const MAXIMO_ACTIVAS = 6;
@@ -94,14 +95,17 @@ export default function Resumen() {
                     ))}
                   </dl>
                 </Panel>
-                <Panel titulo="Estado de las solicitudes" cuerpo="">
-                  <dl className="grid grid-cols-3 divide-x divide-gray-100">
+                <Panel titulo="Estado de las solicitudes" cuerpo="" className="overflow-hidden">
+                  <dl className="grid grid-cols-2 gap-px bg-gray-100 sm:grid-cols-3">
                     {[
                       ['Completadas', dashboard.solicitudes.completadas],
                       ['Canceladas', dashboard.solicitudes.canceladas],
+                      ['Falsas', dashboard.solicitudes.falsas],
+                      ['Caducadas', dashboard.solicitudes.caducadas],
+                      ['Por confirmar', dashboard.solicitudes.por_confirmar],
                       ['Totales', dashboard.solicitudes.total]
                     ].map(([etiqueta, valor]) => (
-                      <div key={etiqueta} className="px-4 py-4">
+                      <div key={etiqueta} className="bg-white px-4 py-4">
                         <dt className="text-sm text-gray-600">{etiqueta}</dt>
                         <dd className="mt-1 font-display text-2xl font-bold tabular-nums text-gray-900">{valor}</dd>
                       </div>
@@ -123,10 +127,12 @@ function abierta(valor) {
   return texto.startsWith('Hace') ? 'Abierta ' + texto.toLowerCase() : 'Abierta el ' + texto;
 }
 
-// Criticas primero y, dentro de cada prioridad, la que lleva mas tiempo abierta
+const ORDEN_URGENCIA = { critica: 0, urgente: 1, normal: 2 };
+
+// Criticas, luego urgentes y normales; dentro de cada prioridad, la que lleva mas tiempo abierta
 function ordenarPorUrgencia(lista) {
   return [...lista].sort((a, b) =>
-    Number(b.urgencia === 'critica') - Number(a.urgencia === 'critica') ||
+    (ORDEN_URGENCIA[a.urgencia] ?? 9) - (ORDEN_URGENCIA[b.urgencia] ?? 9) ||
     new Date(a.fecha_solicitud) - new Date(b.fecha_solicitud)
   );
 }
@@ -176,24 +182,12 @@ function EnCamino({ activas, base, alRegistrar }) {
 function FilaEnCamino({ notificacion: n, base, alTerminar }) {
   const [registrando, setRegistrando] = useState(false);
 
-  async function registrar() {
-    setRegistrando(true);
-    try {
-      await notificaciones.registrarDonacion(n.id);
-      await alTerminar({ tono: 'exito', texto: 'Donación ' + codigoAsistencia(n.id) + ' registrada en el historial del donante.' });
-    } catch (e) {
-      await alTerminar({ tono: 'error', texto: e.message });
-    } finally {
-      setRegistrando(false);
-    }
-  }
-
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg bg-acento-700 px-4 py-3">
       <span className="font-mono text-2xl font-bold tracking-wide">{codigoAsistencia(n.id)}</span>
       <span className="min-w-40 flex-1 text-sm">
         <span className="block font-semibold">
-          Sangre {n.tipo_sangre} · {n.urgencia === 'critica' ? 'Crítica' : 'Urgente'}
+          Sangre {n.tipo_sangre} · {textoUrgencia(n.urgencia)}
         </span>
         <span className="block">
           Confirmó {hace(n.fecha_respuesta).toLowerCase()} ·{' '}
@@ -202,7 +196,15 @@ function FilaEnCamino({ notificacion: n, base, alTerminar }) {
           </Link>
         </span>
       </span>
-      <Boton variante="blanco" cargando={registrando} onClick={registrar} className="w-full sm:w-auto">Registrar donación</Boton>
+      <Boton variante="blanco" onClick={() => setRegistrando(true)} className="w-full sm:w-auto">Registrar donación</Boton>
+      {registrando && (
+        <DialogoDonacion
+          notificacion={n}
+          detalle={'Sangre ' + n.tipo_sangre + ' · Solicitud #' + n.id_solicitud}
+          alCerrar={() => setRegistrando(false)}
+          alRegistrar={(texto) => { setRegistrando(false); alTerminar({ tono: 'exito', texto }); }}
+        />
+      )}
     </li>
   );
 }
@@ -239,6 +241,9 @@ function SolicitudesActivas({ consulta, base, esAdmin }) {
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold text-gray-900">{esAdmin ? s.hospital_nombre : 'Solicitud #' + s.id}</span>
                     <span className="block text-xs text-gray-600">{abierta(s.fecha_solicitud)}</span>
+                    {s.ciudadana && (
+                      <span className="mt-1 flex flex-wrap gap-1.5"><InsigniasCiudadana solicitud={s} /></span>
+                    )}
                   </span>
                   <span className="justify-self-end @3xl:justify-self-start"><BadgeUrgencia urgencia={s.urgencia} /></span>
                   <BarraProgreso valor={s.unidades_donadas} maximo={s.unidades_requeridas} etiqueta={'Unidades obtenidas de la solicitud ' + s.id} className="col-span-2 self-center @3xl:col-span-1" />

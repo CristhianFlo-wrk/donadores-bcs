@@ -3,8 +3,7 @@ import { LogOut } from 'lucide-react';
 import { donantes, ubicaciones } from '../../api/servicios.js';
 import { useConsulta } from '../../hooks/useConsulta.js';
 import { useSesion } from '../../contexto/SesionContext.jsx';
-import { Aviso, Boton, Campo, EncabezadoPagina, EstadoConsulta, FichaSangre, Selector, Tarjeta } from '../../componentes/ui.jsx';
-import { TarjetaInstalar } from '../../componentes/Pwa.jsx';
+import { Aviso, Boton, Campo, EncabezadoPagina, ErrorColonias, EstadoConsulta, FichaSangre, Selector, Tarjeta } from '../../componentes/ui.jsx';
 import { fecha, nombreRegion } from '../../utils/formato.js';
 
 export default function Perfil() {
@@ -57,10 +56,6 @@ export default function Perfil() {
                   </div>
                 </div>
               )}
-            </FilaAjuste>
-
-            <FilaAjuste titulo="Aplicación" descripcion="Instálala para abrirla desde tu pantalla de inicio y recibir avisos más rápido.">
-              <TarjetaInstalar sinOpcion={<p className="rounded-xl border border-gray-200 bg-white p-5 text-sm text-gray-600">La app ya está instalada o tu navegador no permite instalarla.</p>} />
             </FilaAjuste>
 
             <FilaAjuste titulo="Sesión" descripcion="Cierra la sesión en este dispositivo." className="lg:hidden">
@@ -124,8 +119,11 @@ function FormularioPerfil({ perfil, alTerminar }) {
       if (telefono && !/^\d{10}$/.test(telefono)) return setError('El teléfono debe tener 10 dígitos.');
       cambios.telefono = telefono || null;
     }
-    if (peso && Number(peso) !== perfil.peso_kg) {
+    // El backend no acepta borrar el peso una vez registrado
+    if (!peso && perfil.peso_kg) return setError('El peso no se puede borrar; si cambió, escribe el nuevo.');
+    if (peso && Number(peso) !== Number(perfil.peso_kg)) {
       if (Number(peso) < 50) return setError('El peso mínimo para donar es 50 kg.');
+      if (Number(peso) > 300) return setError('Revisa el peso: el máximo es 300 kg.');
       cambios.peso_kg = Number(peso);
     }
     if (idColonia) {
@@ -162,13 +160,16 @@ function FormularioPerfil({ perfil, alTerminar }) {
             opciones={(consultaMunicipios.datos?.municipios || []).map((m) => ({ valor: String(m.id), texto: m.nombre }))}
           />
           {idMunicipio && (
-            <Selector
-              etiqueta="Colonia"
-              id="colonia"
-              value={idColonia}
-              onChange={(e) => setIdColonia(e.target.value)}
-              opciones={colonias.map((c) => ({ valor: String(c.id), texto: c.nombre }))}
-            />
+            <div>
+              <Selector
+                etiqueta="Colonia"
+                id="colonia"
+                value={idColonia}
+                onChange={(e) => setIdColonia(e.target.value)}
+                opciones={colonias.map((c) => ({ valor: String(c.id), texto: c.nombre }))}
+              />
+              {consultaColonias.error && <ErrorColonias alReintentar={consultaColonias.recargar} />}
+            </div>
           )}
           {esOtra && (
             <Campo etiqueta="Nombre de tu colonia" id="colonia_personalizada" value={coloniaPersonalizada} onChange={(e) => setColoniaPersonalizada(e.target.value)} />

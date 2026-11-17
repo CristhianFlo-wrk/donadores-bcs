@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useLocation, useParams } from 'react-router';
-import { CircleCheck, X } from 'lucide-react';
+import { CircleCheck } from 'lucide-react';
 import { auditoria, notificaciones, solicitudes } from '../../api/servicios.js';
 import { useConsulta } from '../../hooks/useConsulta.js';
 import { useSesion } from '../../contexto/SesionContext.jsx';
-import { Aviso, BarraProgreso, Boton, Cargando, EncabezadoPagina, EstadoConsulta, FichaSangre, Panel, TiraMetricas, TituloSeccion, Vacio } from '../../componentes/ui.jsx';
+import { Aviso, BarraProgreso, Boton, Cargando, Dialogo, EncabezadoPagina, EstadoConsulta, FichaSangre, Panel, Selector, TiraMetricas, TituloSeccion, Vacio } from '../../componentes/ui.jsx';
+import DialogoDonacion from '../../componentes/DialogoDonacion.jsx';
+import FotosSolicitud from '../../componentes/FotosSolicitud.jsx';
 import { puedeRecibirDe } from '../../utils/compatibilidad.js';
-import { BadgeEstadoNotificacion, BadgeEstadoSolicitud, BadgeUrgencia } from '../../componentes/insignias.jsx';
+import { BadgeEstadoNotificacion, BadgeEstadoSolicitud, BadgeUrgencia, InsigniasCiudadana, textoUrgencia } from '../../componentes/insignias.jsx';
 import BloqueIntegridad from '../../componentes/BloqueIntegridad.jsx';
 import { codigoAsistencia, fecha, fechaHora, hace, nombreRegion } from '../../utils/formato.js';
 
@@ -15,6 +17,8 @@ export default function DetalleSolicitud() {
   const { usuario } = useSesion();
   const ubicacion = useLocation();
   const base = usuario.rol === 'admin' ? '/admin' : '/hospital';
+  // Solo el hospital de la solicitud y el admin la gestionan; el backend responde 403 a los demas
+  const gestiona = (solicitud) => usuario.rol === 'admin' || usuario.id_hospital === solicitud.hospital.id;
 
   // El contador de respuestas se actualiza cada 10 s (polling)
   const consulta = useConsulta(() => solicitudes.obtener(id), [id], { intervaloMs: 10000 });
@@ -38,15 +42,22 @@ export default function DetalleSolicitud() {
                 <span className="flex flex-wrap items-center gap-2">
                   <BadgeUrgencia urgencia={solicitud.urgencia} />
                   <BadgeEstadoSolicitud estado={solicitud.estado} />
+                  <InsigniasCiudadana solicitud={solicitud} />
                   <span>{solicitud.hospital.nombre} · {nombreRegion(solicitud.hospital.region)} · {fechaHora(solicitud.fecha_solicitud)}</span>
                 </span>
               }
-              acciones={solicitud.estado === 'activa' && (
+              acciones={gestiona(solicitud) && solicitud.estado === 'activa' && (
                 <Acciones solicitud={solicitud} alTerminar={(nuevoAviso) => { setAviso(nuevoAviso); consulta.recargar(); }} />
               )}
             />
 
             {aviso && <Aviso tono={aviso.tono} className="mb-6">{aviso.texto}</Aviso>}
+            {gestiona(solicitud) && solicitud.ciudadana && solicitud.estado === 'activa' && solicitud.por_confirmar && (
+              <Aviso tono="aviso" className="mb-6">
+                La pidió un donante y todavía no se avisa a nadie. Revisa que el paciente esté en el hospital.{' '}
+                <a href="#moderacion" className="font-semibold underline underline-offset-2 hover:no-underline">Confirmar la solicitud</a>
+              </Aviso>
+            )}
 
             <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
               <div className="min-w-0 space-y-6">
@@ -62,7 +73,7 @@ export default function DetalleSolicitud() {
                   ]}
                 />
 
-                <Panel
+                {gestiona(solicitud) && <Panel
                   titulo="Donantes notificados"
                   detalle="Por privacidad no se muestran nombres. El donante presenta su código de asistencia al llegar."
                   cuerpo=""
@@ -83,7 +94,8 @@ export default function DetalleSolicitud() {
                           <FilaNotificacion
                             key={n.id}
                             notificacion={n}
-                            solicitudCancelada={solicitud.estado === 'cancelada'}
+                            detalle={'Sangre ' + solicitud.tipo_sangre + ' · Solicitud #' + solicitud.id}
+                            registroBloqueado={['cancelada', 'falsa'].includes(solicitud.estado)}
                             alRegistrar={(nuevoAviso) => { setAviso(nuevoAviso); consulta.recargar(); }}
                             alVerificar={() => setVerificando(n.id)}
                           />
@@ -91,7 +103,15 @@ export default function DetalleSolicitud() {
                       </ul>
                     </div>
                   )}
-                </Panel>
+                </Panel>}
+
+                {(solicitud.historia || solicitud.imagenes.length > 0) && (
+                  <PanelPublicacion
+                    solicitud={solicitud}
+                    puedeModerar={gestiona(solicitud)}
+                    alCambiar={(nuevoAviso) => { setAviso(nuevoAviso); consulta.recargar(); }}
+                  />
+                )}
               </div>
 
               <aside className="space-y-6 xl:sticky xl:top-8">
@@ -100,11 +120,14 @@ export default function DetalleSolicitud() {
                     {puedeRecibirDe(solicitud.tipo_sangre).map((t) => <FichaSangre key={t} tipo={t} tamano="sm" />)}
                   </div>
                   <p className="mt-3 text-sm text-gray-700">
-                    {solicitud.urgencia === 'critica'
-                      ? 'Prioridad crítica: se avisa a donantes compatibles de todo el estado.'
-                      : 'Prioridad urgente: se avisa a donantes de la región del hospital. Puedes ampliar a todo el estado.'}
+                    {solicitud.por_confirmar && solicitud.estado === 'activa' ? 'Todavía no se avisa a nadie. Al confirmarla: ' : ''}
+                    {ALCANCE_URGENCIA[solicitud.urgencia]}
                   </p>
                 </Panel>
+                {solicitud.paciente && <PanelPaciente solicitud={solicitud} />}
+                {gestiona(solicitud) && solicitud.ciudadana && ESTADOS_MODERABLES.includes(solicitud.estado) && (
+                  <Moderacion key={solicitud.urgencia + String(solicitud.por_confirmar)} solicitud={solicitud} alTerminar={(nuevoAviso) => { setAviso(nuevoAviso); consulta.recargar(); }} />
+                )}
                 {solicitud.descripcion && (
                   <Panel titulo="Descripción">
                     <p className="text-sm text-gray-800">{solicitud.descripcion}</p>
@@ -124,9 +147,182 @@ export default function DetalleSolicitud() {
   );
 }
 
+const ALCANCE_URGENCIA = {
+  critica: 'Prioridad crítica: se avisa a donantes compatibles de todo el estado.',
+  urgente: 'Prioridad urgente: se avisa a donantes de la región del hospital. Puedes ampliar a todo el estado.',
+  normal: 'Prioridad programada: se avisa a donantes de la región del hospital. Puedes ampliar a todo el estado.'
+};
+
+// Una ciudadana se puede marcar falsa aunque el autor la haya cancelado o haya caducado
+const ESTADOS_MODERABLES = ['activa', 'cancelada', 'caducada'];
+
+function PanelPaciente({ solicitud }) {
+  const { paciente } = solicitud;
+  return (
+    <Panel titulo="Paciente">
+      <dl className="space-y-3 text-sm">
+        <div className="flex justify-between gap-3">
+          <dt className="text-gray-600">Nombre</dt>
+          <dd className="text-right font-medium text-gray-900">{paciente.nombre}</dd>
+        </div>
+        {'expediente' in paciente && (
+          <div className="flex justify-between gap-3">
+            <dt className="text-gray-600">Expediente</dt>
+            <dd className={'text-right ' + (paciente.expediente ? 'font-medium text-gray-900' : 'text-gray-500')}>{paciente.expediente || 'Sin expediente'}</dd>
+          </div>
+        )}
+      </dl>
+      <p className="mt-3 text-sm text-gray-700">{paciente.para_si_mismo ? 'El paciente es quien la pidió.' : 'Pedida por un donante.'}</p>
+      {solicitud.estado === 'activa' && solicitud.fecha_caducidad && (
+        <p className="mt-1 text-xs text-gray-600">Caduca el {fechaHora(solicitud.fecha_caducidad)}</p>
+      )}
+    </Panel>
+  );
+}
+
+// Mensaje y fotos del autor tal como los veran los donantes. Antes de confirmar se revisan; si algo no debe publicarse
+// (un telefono, una foto que no corresponde) se quita sin rechazar toda la solicitud
+function PanelPublicacion({ solicitud, puedeModerar, alCambiar }) {
+  const [confirmarMensaje, setConfirmarMensaje] = useState(false);
+  const [quitandoMensaje, setQuitandoMensaje] = useState(false);
+  const porConfirmar = solicitud.estado === 'activa' && solicitud.por_confirmar;
+
+  async function quitarFoto(idImagen) {
+    try {
+      await solicitudes.quitarImagen(solicitud.id, idImagen);
+      alCambiar({ tono: 'info', texto: 'Foto quitada. Los donantes ya no la verán.' });
+    } catch (e) {
+      alCambiar({ tono: 'error', texto: e.message });
+    }
+  }
+
+  async function quitarMensaje() {
+    setQuitandoMensaje(true);
+    try {
+      await solicitudes.quitarHistoria(solicitud.id);
+      alCambiar({ tono: 'info', texto: 'Mensaje quitado. Los donantes ya no lo verán.' });
+    } catch (e) {
+      alCambiar({ tono: 'error', texto: e.message });
+    } finally {
+      setQuitandoMensaje(false);
+      setConfirmarMensaje(false);
+    }
+  }
+
+  return (
+    <Panel
+      titulo="Lo que verán los donantes"
+      detalle={porConfirmar ? 'Revísalo antes de confirmar: se publica al confirmar la solicitud.' : 'Mensaje y fotos de quien la pidió.'}
+    >
+      <div className="space-y-4">
+        {solicitud.historia && (
+          <div>
+            <p className="whitespace-pre-line text-sm text-gray-800 [overflow-wrap:anywhere]">{solicitud.historia}</p>
+            {puedeModerar && (confirmarMensaje ? (
+              <div className="mt-2 flex gap-2">
+                <Boton variante="peligro" className="px-3 py-1.5 text-xs" cargando={quitandoMensaje} onClick={quitarMensaje}>Sí, quitar mensaje</Boton>
+                <Boton variante="neutro" className="px-3 py-1.5 text-xs" disabled={quitandoMensaje} onClick={() => setConfirmarMensaje(false)}>No</Boton>
+              </div>
+            ) : (
+              <Boton variante="contorno" className="mt-2 px-3 py-1.5 text-xs" onClick={() => setConfirmarMensaje(true)}>Quitar mensaje</Boton>
+            ))}
+          </div>
+        )}
+        <FotosSolicitud solicitud={solicitud} alQuitar={puedeModerar ? quitarFoto : null} />
+        {puedeModerar && <p className="text-xs text-gray-600">Quitar algo lo borra para siempre y queda anotado en la bitácora.</p>}
+      </div>
+    </Panel>
+  );
+}
+
+// Solo solicitudes ciudadanas: confirmarla (la primera vez avisa a los donantes), cambiar la urgencia y marcar como falsa
+function Moderacion({ solicitud, alTerminar }) {
+  const activa = solicitud.estado === 'activa';
+  const porConfirmar = activa && solicitud.por_confirmar;
+  const [urgencia, setUrgencia] = useState(solicitud.urgencia);
+  const [ocupado, setOcupado] = useState(null);
+  const [confirmarFalsa, setConfirmarFalsa] = useState(false);
+
+  async function ejecutar(nombre, accion) {
+    setOcupado(nombre);
+    try {
+      alTerminar(await accion());
+    } catch (e) {
+      alTerminar({ tono: 'error', texto: e.message });
+    } finally {
+      setOcupado(null);
+      setConfirmarFalsa(false);
+    }
+  }
+
+  const cambiar = (nueva) => ejecutar(nueva, async () => {
+    const resultado = await solicitudes.cambiarUrgencia(solicitud.id, nueva);
+    if (porConfirmar) {
+      return { tono: 'exito', texto: 'Solicitud confirmada como ' + textoUrgencia(nueva).toLowerCase() + '. ' + textoNotificados(resultado.notificaciones_enviadas) };
+    }
+    if (nueva === 'critica') {
+      return { tono: 'exito', texto: 'Urgencia cambiada a crítica. ' + textoNotificados(resultado.notificaciones_enviadas) };
+    }
+    return { tono: 'info', texto: 'Urgencia cambiada a ' + textoUrgencia(nueva).toLowerCase() + '.' };
+  });
+
+  const marcarFalsa = () => ejecutar('falsa', async () => {
+    await solicitudes.cerrar(solicitud.id, 'falsa');
+    return { tono: 'info', texto: 'Solicitud marcada como falsa. Se sumó una falta a la cuenta de quien la pidió.' };
+  });
+
+  // Al confirmar se puede dejar la urgencia que pidio el donante; despues solo se cambia a otra
+  const sinCambio = !porConfirmar && urgencia === solicitud.urgencia;
+
+  return (
+    <Panel id="moderacion" titulo="Moderación" detalle="Solicitud pedida por un donante" className="scroll-mt-20">
+      <div className="space-y-4">
+        {porConfirmar && (
+          <Aviso tono="aviso">
+            Nadie ha recibido aviso todavía. Confirma que el paciente está en el hospital y elige la urgencia
+            {solicitud.urgencia === 'critica' ? ' (el donante dijo que se necesita de inmediato)' : ''}. Al confirmar se avisa a los donantes compatibles.
+          </Aviso>
+        )}
+
+        {activa && (
+          <div className="flex items-end gap-2">
+            <Selector
+              etiqueta="Urgencia"
+              id="moderar-urgencia"
+              className="min-w-0 flex-1"
+              value={urgencia}
+              onChange={(e) => setUrgencia(e.target.value)}
+              opciones={['critica', 'urgente', 'normal'].map((u) => ({ valor: u, texto: textoUrgencia(u) }))}
+            />
+            <Boton variante={porConfirmar ? 'primario' : 'contorno'} disabled={!urgencia || sinCambio || Boolean(ocupado)} cargando={ocupado === urgencia} onClick={() => cambiar(urgencia)}>
+              {porConfirmar ? 'Confirmar y avisar' : 'Cambiar'}
+            </Boton>
+          </div>
+        )}
+
+        {solicitud.metricas?.donaciones > 0 ? (
+          <p className="text-sm text-gray-700">Ya tiene donaciones registradas: el paciente sí estaba en el hospital, así que no se puede marcar como falsa.</p>
+        ) : confirmarFalsa ? (
+          <div className="rounded-lg border border-gray-200 p-3">
+            <p className="text-sm text-gray-700">
+              {activa ? 'Se cerrará y sumará una falta a la cuenta de quien la pidió.' : 'Sumará una falta a la cuenta de quien la pidió.'} Esta acción no se puede deshacer.
+            </p>
+            <div className="mt-2 flex gap-2">
+              <Boton variante="peligro" cargando={ocupado === 'falsa'} onClick={marcarFalsa}>Sí, marcar como falsa</Boton>
+              <Boton variante="neutro" disabled={Boolean(ocupado)} onClick={() => setConfirmarFalsa(false)}>No</Boton>
+            </div>
+          </div>
+        ) : (
+          <Boton variante="peligro" className="w-full" disabled={Boolean(ocupado)} onClick={() => setConfirmarFalsa(true)}>Marcar como falsa</Boton>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
 function textoNotificados(cantidad) {
   if (cantidad === 0) return 'No se encontraron donantes compatibles nuevos para notificar.';
-  return 'Se notificó a ' + cantidad + (cantidad === 1 ? ' donante' : ' donantes') + ' por push y SMS.';
+  return 'Se notificó a ' + cantidad + (cantidad === 1 ? ' donante' : ' donantes') + '.';
 }
 
 // Cada donacion registrada cuenta como una unidad
@@ -171,6 +367,7 @@ function ProgresoUnidades({ donadas, requeridas, activa }) {
 // Primero quien confirmo (viene en camino), luego sin responder, luego el resto
 const ORDEN_NOTIFICACION = { confirmada: 0, enviada: 1, donada: 2, rechazada: 3 };
 
+// Una ciudadana por confirmar no muestra Notificar: se confirma y avisa desde Moderacion
 function Acciones({ solicitud, alTerminar }) {
   const [ocupado, setOcupado] = useState(null);
   const [confirmarCierre, setConfirmarCierre] = useState(null);
@@ -215,10 +412,12 @@ function Acciones({ solicitud, alTerminar }) {
 
   return (
     <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
-      <Boton className="col-span-2" cargando={ocupado === 'region'} disabled={Boolean(ocupado)} onClick={() => notificar(false)}>
-        Notificar donantes
-      </Boton>
-      {solicitud.urgencia !== 'critica' && (
+      {!solicitud.por_confirmar && (
+        <Boton className="col-span-2" cargando={ocupado === 'region'} disabled={Boolean(ocupado)} onClick={() => notificar(false)}>
+          Notificar donantes
+        </Boton>
+      )}
+      {!solicitud.por_confirmar && solicitud.urgencia !== 'critica' && (
         <Boton variante="contorno" className="col-span-2" cargando={ocupado === 'todas'} disabled={Boolean(ocupado)} onClick={() => notificar(true)}>
           Ampliar a todo el estado
         </Boton>
@@ -232,20 +431,8 @@ function Acciones({ solicitud, alTerminar }) {
 // Con espacio suficiente la lista se ve como tabla; en un contenedor angosto cada notificacion es una tarjeta
 const COLUMNAS_NOTIFICACION = '@3xl:grid-cols-[6rem_11rem_minmax(0,1fr)_minmax(0,1fr)_auto] @3xl:gap-4';
 
-function FilaNotificacion({ notificacion: n, solicitudCancelada, alRegistrar, alVerificar }) {
+function FilaNotificacion({ notificacion: n, detalle, registroBloqueado, alRegistrar, alVerificar }) {
   const [registrando, setRegistrando] = useState(false);
-
-  async function registrar() {
-    setRegistrando(true);
-    try {
-      await notificaciones.registrarDonacion(n.id);
-      alRegistrar({ tono: 'exito', texto: 'Donación ' + codigoAsistencia(n.id) + ' registrada en el historial del donante.' });
-    } catch (e) {
-      alRegistrar({ tono: 'error', texto: e.message });
-    } finally {
-      setRegistrando(false);
-    }
-  }
 
   return (
     <li className={'px-5 py-3.5 @3xl:grid @3xl:items-center ' + COLUMNAS_NOTIFICACION}>
@@ -258,11 +445,19 @@ function FilaNotificacion({ notificacion: n, solicitudCancelada, alRegistrar, al
         <span className="@3xl:hidden">Respuesta: </span>{n.fecha_respuesta ? fechaHora(n.fecha_respuesta) : '-'}
       </p>
       <div className="mt-3 flex gap-2 @3xl:mt-0 @3xl:justify-end">
-        {n.estado === 'confirmada' && !solicitudCancelada && (
-          <Boton className="flex-1 px-3 py-1.5 @3xl:flex-none" cargando={registrando} onClick={registrar}>Registrar donación</Boton>
+        {n.estado === 'confirmada' && !registroBloqueado && (
+          <Boton className="flex-1 px-3 py-1.5 @3xl:flex-none" onClick={() => setRegistrando(true)}>Registrar donación</Boton>
         )}
         <Boton variante="contorno" className="flex-1 px-3 py-1.5 @3xl:flex-none" onClick={alVerificar}>Ver historial</Boton>
       </div>
+      {registrando && (
+        <DialogoDonacion
+          notificacion={n}
+          detalle={detalle}
+          alCerrar={() => setRegistrando(false)}
+          alRegistrar={(texto) => { setRegistrando(false); alRegistrar({ tono: 'exito', texto }); }}
+        />
+      )}
     </li>
   );
 }
@@ -272,35 +467,21 @@ function ModalHistorial({ idNotificacion, alCerrar }) {
   const consulta = useConsulta(() => auditoria.porNotificacion(idNotificacion), [idNotificacion]);
 
   return (
-    <div className="fixed inset-0 z-30 flex items-end justify-center bg-gray-900/40 p-0 sm:items-center sm:p-4" onClick={alCerrar}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="titulo-historial"
-        className="max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h3 id="titulo-historial" className="text-base font-bold text-gray-900">Historial del donante {codigoAsistencia(idNotificacion)}</h3>
-          <button type="button" onClick={alCerrar} aria-label="Cerrar" className="rounded-lg p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-600">
-            <X className="size-5" />
-          </button>
-        </div>
-        {consulta.cargando ? <Cargando /> : consulta.error ? <Aviso>{consulta.error.message}</Aviso> : (
-          <>
-            <BloqueIntegridad verificacion={consulta.datos.verificacion} />
-            <TituloSeccion className="mt-6">{consulta.datos.total} {consulta.datos.total === 1 ? 'donación previa' : 'donaciones previas'}</TituloSeccion>
-            <ul className="divide-y divide-gray-100 text-sm">
-              {consulta.datos.entradas.map((e) => (
-                <li key={e.id} className="flex justify-between gap-3 py-2">
-                  <span className="text-gray-700">{e.hospital_nombre}</span>
-                  <span className="shrink-0 text-gray-500">{fecha(e.fecha_donacion)}</span>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </div>
-    </div>
+    <Dialogo id="titulo-historial" titulo={'Historial del donante ' + codigoAsistencia(idNotificacion)} alCerrar={alCerrar}>
+      {consulta.cargando ? <Cargando /> : consulta.error ? <Aviso>{consulta.error.message}</Aviso> : (
+        <>
+          <BloqueIntegridad verificacion={consulta.datos.verificacion} />
+          <TituloSeccion className="mt-6">{consulta.datos.total} {consulta.datos.total === 1 ? 'donación registrada' : 'donaciones registradas'}</TituloSeccion>
+          <ul className="divide-y divide-gray-100 text-sm">
+            {consulta.datos.entradas.map((e) => (
+              <li key={e.id} className="flex justify-between gap-3 py-2">
+                <span className="text-gray-700">{e.hospital_nombre}</span>
+                <span className="shrink-0 text-gray-500">{fecha(e.fecha_donacion)}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Dialogo>
   );
 }

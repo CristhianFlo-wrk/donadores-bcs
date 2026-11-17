@@ -1,28 +1,35 @@
 import { Link, Navigate, Route, Routes } from 'react-router';
 import { rutaInicioPorRol, useSesion } from './contexto/SesionContext.jsx';
-import RutaProtegida from './componentes/RutaProtegida.jsx';
+import RutaProtegida, { SesionSinConfirmar } from './componentes/RutaProtegida.jsx';
 import LayoutDonante from './componentes/LayoutDonante.jsx';
 import LayoutPanel from './componentes/LayoutPanel.jsx';
 import { Cargando } from './componentes/ui.jsx';
-import { AvisoSinConexion } from './componentes/Pwa.jsx';
+import AvisoSinConexion from './componentes/AvisoSinConexion.jsx';
 import Presentacion from './paginas/publico/Presentacion.jsx';
 import Login from './paginas/publico/Login.jsx';
 import Registro from './paginas/publico/Registro.jsx';
+import Privacidad from './paginas/publico/Privacidad.jsx';
 import Inicio from './paginas/donante/Inicio.jsx';
 import Alertas from './paginas/donante/Alertas.jsx';
 import Historial from './paginas/donante/Historial.jsx';
 import Perfil from './paginas/donante/Perfil.jsx';
 import AntesDeDonar from './paginas/donante/AntesDeDonar.jsx';
+import MisSolicitudes from './paginas/donante/MisSolicitudes.jsx';
+import PedirSangre from './paginas/donante/PedirSangre.jsx';
+import VerSolicitud from './paginas/donante/VerSolicitud.jsx';
 import Resumen from './paginas/panel/Resumen.jsx';
 import Solicitudes from './paginas/panel/Solicitudes.jsx';
 import NuevaSolicitud from './paginas/panel/NuevaSolicitud.jsx';
 import DetalleSolicitud from './paginas/panel/DetalleSolicitud.jsx';
 import Usuarios from './paginas/admin/Usuarios.jsx';
 import Auditoria from './paginas/admin/Auditoria.jsx';
+import Constancias from './paginas/admin/Constancias.jsx';
+import Catalogos from './paginas/admin/Catalogos.jsx';
 
 function Raiz() {
-  const { usuario, cargando } = useSesion();
+  const { usuario, cargando, sinConexion } = useSesion();
   if (cargando) return <Cargando texto="Verificando sesión..." />;
+  if (!usuario && sinConexion) return <SesionSinConfirmar />;
   if (!usuario) return <Presentacion />;
   return <Navigate to={rutaInicioPorRol(usuario.rol)} replace />;
 }
@@ -63,13 +70,18 @@ function Rutas() {
       <Route path="/" element={<Raiz />} />
       <Route path="/login" element={<Login />} />
       <Route path="/registro" element={<Registro />} />
+      <Route path="/privacidad" element={<Privacidad />} />
 
       <Route element={<RutaProtegida roles={['donante']} />}>
         <Route path="/donante" element={<LayoutDonante />}>
           <Route index element={<Inicio />} />
           <Route path="alertas" element={<Alertas />} />
           <Route path="historial" element={<Historial />} />
-          <Route path="antes-de-donar" element={<AntesDeDonar />} />          <Route path="perfil" element={<Perfil />} />
+          <Route path="solicitudes" element={<MisSolicitudes />} />
+          <Route path="solicitudes/nueva" element={<PedirSangre />} />
+          <Route path="solicitud/:id" element={<VerSolicitud />} />
+          <Route path="antes-de-donar" element={<AntesDeDonar />} />
+          <Route path="perfil" element={<Perfil />} />
         </Route>
       </Route>
 
@@ -85,7 +97,16 @@ function Rutas() {
           <Route index element={<Resumen />} />
           {rutasSolicitudes()}
           <Route path="usuarios" element={<Usuarios />} />
+          <Route path="catalogos" element={<Catalogos />} />
           <Route path="auditoria" element={<Auditoria />} />
+          <Route path="constancias" element={<Constancias />} />
+        </Route>
+      </Route>
+
+      <Route element={<RutaProtegida roles={['auditor']} />}>
+        <Route path="/auditor" element={<LayoutPanel />}>
+          <Route index element={<Auditoria />} />
+          <Route path="constancias" element={<Constancias />} />
         </Route>
       </Route>
 

@@ -181,7 +181,7 @@ export default function AntesDeDonar() {
           <div className="rounded-xl bg-acento-50 p-5">
             <p className="text-sm font-semibold text-acento-800">¿Te llegó una alerta?</p>
             <p className="mt-1 text-sm text-gray-700">Confírmala para recibir tu código de asistencia y preséntalo en el hospital.</p>
-            <Link to="/donante/alertas" className="mt-3 inline-block text-sm font-semibold text-acento-700 underline hover:text-acento-800">Ver mis alertas</Link>
+            <Link to="/donante/alertas" className="mt-2.5 inline-block py-0.5 text-sm font-semibold text-acento-700 underline hover:text-acento-800">Ver mis alertas</Link>
           </div>
         </aside>
       </div>

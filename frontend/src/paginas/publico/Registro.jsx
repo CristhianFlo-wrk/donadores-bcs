@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router';
 import MarcoPublico from '../../componentes/MarcoPublico.jsx';
-import { Aviso, Boton, Campo, Selector } from '../../componentes/ui.jsx';
+import { Aviso, Boton, Campo, ErrorColonias, Selector } from '../../componentes/ui.jsx';
 import { rutaInicioPorRol, useSesion } from '../../contexto/SesionContext.jsx';
 import { auth, ubicaciones } from '../../api/servicios.js';
 import { useConsulta } from '../../hooks/useConsulta.js';
@@ -23,7 +23,8 @@ const FORMULARIO_INICIAL = {
   peso_kg: '',
   id_municipio: '',
   id_colonia: '',
-  colonia_personalizada: ''
+  colonia_personalizada: '',
+  acepta_privacidad: false
 };
 
 function calcularEdad(fechaTexto) {
@@ -54,6 +55,7 @@ function validar(formulario, esOtra) {
   if (formulario.telefono && !/^\d{10}$/.test(formulario.telefono)) errores.telefono = 'Teléfono de 10 dígitos';
   if (!formulario.id_colonia) errores.id_colonia = 'Selecciona tu colonia';
   if (esOtra && !formulario.colonia_personalizada.trim()) errores.colonia_personalizada = 'Escribe el nombre de tu colonia';
+  if (!formulario.acepta_privacidad) errores.acepta_privacidad = 'Para registrarte necesitamos tu consentimiento.';
   return errores;
 }
 
@@ -80,9 +82,9 @@ export default function Registro() {
   const municipioElegido = (consultaMunicipios.datos?.municipios || []).find((m) => String(m.id) === formulario.id_municipio);
 
   function cambiar(evento) {
-    const { name, value } = evento.target;
+    const { name, value, type, checked } = evento.target;
     setFormulario((anterior) => {
-      const siguiente = { ...anterior, [name]: value };
+      const siguiente = { ...anterior, [name]: type === 'checkbox' ? checked : value };
       if (name === 'id_municipio') {
         siguiente.id_colonia = '';
         siguiente.colonia_personalizada = '';
@@ -108,7 +110,8 @@ export default function Registro() {
       curp: formulario.curp.trim().toUpperCase(),
       fecha_nacimiento: formulario.fecha_nacimiento,
       id_tipo_sangre: Number(formulario.id_tipo_sangre),
-      id_colonia: Number(formulario.id_colonia)
+      id_colonia: Number(formulario.id_colonia),
+      acepta_privacidad: true
     };
     if (formulario.sexo) datos.sexo = formulario.sexo;
     if (formulario.telefono) datos.telefono = formulario.telefono;
@@ -164,7 +167,7 @@ export default function Registro() {
             {errores.id_tipo_sangre && <p className="mt-1 text-xs text-red-700">{errores.id_tipo_sangre}</p>}
           </div>
           <Campo etiqueta="Peso en kg (opcional)" type="number" inputMode="decimal" min="50" max="300" {...propsCampo('peso_kg')} />
-          <Campo etiqueta="Teléfono (opcional)" type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={10} className="sm:col-span-2" ayuda="Para avisos por SMS" {...propsCampo('telefono')} />
+          <Campo etiqueta="Teléfono (opcional)" type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={10} className="sm:col-span-2" {...propsCampo('telefono')} />
         </fieldset>
 
         <fieldset className="grid gap-4 sm:grid-cols-2">
@@ -188,6 +191,7 @@ export default function Registro() {
               vacio={formulario.id_municipio ? 'Selecciona tu colonia' : 'Primero elige el municipio'}
               opciones={colonias.map((c) => ({ valor: String(c.id), texto: c.nombre }))}
             />
+            {consultaColonias.error && <ErrorColonias alReintentar={consultaColonias.recargar} />}
             {errores.id_colonia && <p className="mt-1 text-xs text-red-700">{errores.id_colonia}</p>}
           </div>
           {esOtra && (
@@ -198,6 +202,29 @@ export default function Registro() {
               Recibirás alertas de la {nombreRegion(municipioElegido.region)} y alertas críticas de todo el estado.
             </p>
           )}
+        </fieldset>
+
+        <fieldset className="rounded-lg border border-gray-200 p-4">
+          <legend className="px-1 text-sm font-semibold text-gray-900">Privacidad</legend>
+          <p className="text-sm text-gray-700">
+            Usaremos tus datos, incluidos tu tipo de sangre y otros datos de salud, solo para avisarte cuando un hospital necesite
+            tu sangre, coordinar tus donaciones y proteger el sistema. Los hospitales nunca ven tu nombre, tu CURP ni tu teléfono.
+            Consulta el{' '}
+            <Link to="/privacidad" target="_blank" rel="noreferrer" className="font-semibold text-red-700 underline">aviso de privacidad completo</Link>.
+          </p>
+          <label className="mt-3 flex items-start gap-3 text-sm text-gray-900">
+            <input
+              type="checkbox"
+              name="acepta_privacidad"
+              checked={formulario.acepta_privacidad}
+              onChange={cambiar}
+              aria-invalid={Boolean(errores.acepta_privacidad)}
+              aria-describedby={errores.acepta_privacidad ? 'error-privacidad' : undefined}
+              className="mt-0.5 size-4 shrink-0 accent-red-600"
+            />
+            <span>Leí el aviso de privacidad y doy mi consentimiento expreso para el tratamiento de mis datos personales, incluidos los de salud.</span>
+          </label>
+          {errores.acepta_privacidad && <p id="error-privacidad" className="mt-2 text-xs text-red-700">{errores.acepta_privacidad}</p>}
         </fieldset>
 
         <Aviso>{errorGeneral}</Aviso>

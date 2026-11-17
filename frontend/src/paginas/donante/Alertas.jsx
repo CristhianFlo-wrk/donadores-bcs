@@ -1,24 +1,38 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router';
 import { MapPin } from 'lucide-react';
-import { notificaciones } from '../../api/servicios.js';
+import { donantes, notificaciones } from '../../api/servicios.js';
 import { useConsulta } from '../../hooks/useConsulta.js';
 import { Aviso, Badge, Boton, EncabezadoPagina, EstadoConsulta, FichaSangre, TituloSeccion, Vacio } from '../../componentes/ui.jsx';
-import { BadgeEstadoNotificacion } from '../../componentes/insignias.jsx';
+import { BadgeEstadoNotificacion, textoUrgencia } from '../../componentes/insignias.jsx';
 import { codigoAsistencia, hace } from '../../utils/formato.js';
 
 export default function Alertas() {
-  const consulta = useConsulta(() => notificaciones.mias(), [], { intervaloMs: 30000 });
-  const { recargarAlertas } = useOutletContext();
+  const { alertas: consulta, recargarAlertas } = useOutletContext();
+  const consultaPerfil = useConsulta(() => donantes.perfil());
+  const consultaStats = useConsulta(() => donantes.stats());
+
+  // Al entrar se piden de nuevo para no mostrar datos de hasta 30s
+  useEffect(() => {
+    recargarAlertas();
+  }, [recargarAlertas]);
 
   const lista = consulta.datos?.notificaciones || [];
   const nuevas = lista.filter((n) => n.estado === 'enviada' && n.solicitud_estado === 'activa').length;
   const abiertas = lista.filter((n) => n.solicitud_estado === 'activa' && n.estado !== 'donada');
   const anteriores = lista.filter((n) => !(n.solicitud_estado === 'activa' && n.estado !== 'donada'));
+  const confirmada = abiertas.find((n) => n.estado === 'confirmada');
+
+  // Las mismas reglas que valida el backend, para no ofrecer "Asistiré" cuando va a fallar
+  function motivoSinConfirmar(n) {
+    if (consultaPerfil.datos && !consultaPerfil.datos.perfil.disponible) return 'Activa tu disponibilidad en Inicio para confirmar.';
+    if (consultaStats.datos && !consultaStats.datos.stats.puede_donar) return 'Aún no termina tu periodo de espera entre donaciones.';
+    if (confirmada && confirmada.id !== n.id) return 'Ya confirmaste otra solicitud. Si no vas a ir, márcala como "No puedo asistir" primero.';
+    return null;
+  }
 
   async function alResponder() {
-    await consulta.recargar();
-    recargarAlertas();
+    await recargarAlertas();
   }
 
   return (
@@ -32,7 +46,7 @@ export default function Alertas() {
         <div className="min-w-0">
           <EstadoConsulta consulta={consulta}>
             {() => lista.length === 0 ? (
-              <Vacio titulo="Sin alertas por ahora">Cuando un hospital necesite tu tipo de sangre te llegará un aviso aquí y por SMS.</Vacio>
+              <Vacio titulo="Sin alertas por ahora">Cuando un hospital necesite tu tipo de sangre te llegará un aviso aquí.</Vacio>
             ) : (
               <>
                 <TituloSeccion>Solicitudes abiertas</TituloSeccion>
@@ -41,7 +55,7 @@ export default function Alertas() {
                 ) : (
                   <ul className="grid gap-4 md:grid-cols-2 md:items-start xl:grid-cols-1 2xl:grid-cols-2">
                     {abiertas.map((n) => (
-                      <li key={n.id}><TarjetaAlerta notificacion={n} alResponder={alResponder} /></li>
+                      <li key={n.id}><TarjetaAlerta notificacion={n} alResponder={alResponder} motivoSinConfirmar={motivoSinConfirmar(n)} /></li>
                     ))}
                   </ul>
                 )}
@@ -74,7 +88,7 @@ export default function Alertas() {
   );
 }
 
-function TarjetaAlerta({ notificacion: n, alResponder }) {
+function TarjetaAlerta({ notificacion: n, alResponder, motivoSinConfirmar }) {
   const [enviando, setEnviando] = useState(null);
   const [error, setError] = useState('');
   const pendiente = n.estado === 'enviada';
@@ -99,11 +113,12 @@ function TarjetaAlerta({ notificacion: n, alResponder }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-gray-900">
-              {n.urgencia === 'critica' ? 'Alerta crítica' : 'Alerta urgente'}
+              {'Alerta ' + textoUrgencia(n.urgencia).toLowerCase()}
             </h3>
             <span className="text-xs text-gray-600">{hace(n.fecha_envio)}</span>
           </div>
           <p className="mt-0.5 text-sm text-gray-800">{n.hospital_nombre}</p>
+          {n.paciente_nombre && <p className="mt-0.5 text-sm text-gray-800">Para {n.paciente_nombre}</p>}
           {n.hospital_direccion && (
             <p className="mt-1 flex items-start gap-1 text-xs text-gray-600">
               <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
@@ -128,7 +143,7 @@ function TarjetaAlerta({ notificacion: n, alResponder }) {
       {(n.estado === 'enviada' || n.estado === 'confirmada' || n.estado === 'rechazada') && (
         <div className="mt-4 flex flex-wrap gap-2">
           {n.estado !== 'confirmada' && (
-            <Boton cargando={enviando === 'confirmada'} disabled={Boolean(enviando)} onClick={() => responder('confirmada')} className="min-w-36 flex-1 py-3">
+            <Boton cargando={enviando === 'confirmada'} disabled={Boolean(enviando || motivoSinConfirmar)} onClick={() => responder('confirmada')} className="min-w-36 flex-1 py-3">
               Asistiré
             </Boton>
           )}
@@ -139,15 +154,16 @@ function TarjetaAlerta({ notificacion: n, alResponder }) {
           )}
         </div>
       )}
+      {motivoSinConfirmar && n.estado !== 'confirmada' && <p className="mt-2 text-sm text-gray-700">{motivoSinConfirmar}</p>}
       <Aviso className="mt-3">{error}</Aviso>
     </article>
   );
 }
 
 const PASOS = [
-  { titulo: 'Confirma tu asistencia', detalle: 'Toca "Asistiré" en la alerta. Recibirás un código de asistencia N-0000.' },
+  { titulo: 'Confirma tu asistencia', detalle: 'Toca "Asistiré" en la alerta. Recibirás un código de asistencia N-0000. Solo puedes confirmar una solicitud a la vez.' },
   { titulo: 'Acude al hospital', detalle: 'Lleva una identificación oficial vigente con fotografía. No necesitas ayunar.' },
-  { titulo: 'Presenta tu código', detalle: 'El personal identifica tu respuesta con el código; el hospital no ve tu nombre en el sistema.' },
+  { titulo: 'Presenta tu código', detalle: 'El personal busca tu código y escribe la CURP de tu identificación para comprobar que eres tú; el hospital no ve tu nombre en el sistema.' },
   { titulo: 'Evaluación y donación', detalle: 'El médico confirma si puedes donar ese día. Si donas, el hospital lo registra.' },
   { titulo: 'Queda en tu historial', detalle: 'La donación aparece en Historial con su sello de integridad y empieza tu periodo de espera.' }
 ];

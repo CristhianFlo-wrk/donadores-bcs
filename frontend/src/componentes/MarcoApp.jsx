@@ -29,8 +29,8 @@ function Contador({ valor, etiqueta, className = '' }) {
 
 export default function MarcoApp({ tono, alcance, secciones, correo, alSalir, children }) {
   return (
-    <div className={'tono-' + tono + ' min-h-dvh bg-fondo lg:grid lg:grid-cols-[248px_minmax(0,1fr)]'}>
-      <aside className="sticky top-0 hidden h-dvh flex-col border-r border-gray-200/80 px-3 py-5 lg:flex">
+    <div className={'tono-' + tono + ' min-h-dvh bg-fondo lg:grid lg:grid-cols-[248px_minmax(0,1fr)] print:block print:bg-white'}>
+      <aside className="sticky top-0 hidden h-dvh flex-col border-r border-gray-200/80 px-3 py-5 lg:flex print:hidden">
         <div className="px-2">
           <Marca alcance={alcance} />
         </div>
@@ -73,7 +73,7 @@ export default function MarcoApp({ tono, alcance, secciones, correo, alSalir, ch
         </div>
       </aside>
 
-      <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 md:px-8 lg:hidden">
+      <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 md:px-8 lg:hidden print:hidden">
         <Marca alcance={alcance} />
         <button
           type="button"
@@ -87,13 +87,13 @@ export default function MarcoApp({ tono, alcance, secciones, correo, alSalir, ch
       </header>
 
       <div className="min-w-0">
-        <main className="px-4 pb-28 pt-6 md:px-8 md:pt-8 lg:px-10 lg:pb-10 xl:px-12">
+        <main className="px-4 pb-28 pt-6 md:px-8 md:pt-8 lg:px-10 lg:pb-10 xl:px-12 print:p-0">
           {children}
           <PieLegal />
         </main>
       </div>
 
-      <nav aria-label="Navegación principal" className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden">
+      <nav aria-label="Navegación principal" className="fixed inset-x-0 bottom-0 z-20 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden print:hidden">
         <ul className="mx-auto flex max-w-xl">
           {secciones.map(({ ruta, texto, textoCorto, Icono, exacta, contador }) => (
             <li key={ruta} className="flex-1">

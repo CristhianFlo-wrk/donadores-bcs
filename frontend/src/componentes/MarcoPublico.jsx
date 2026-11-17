@@ -1,4 +1,4 @@
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { BellRing, Droplet, MonitorSmartphone, ShieldCheck } from 'lucide-react';
 
 const PUNTOS = [
@@ -22,6 +22,8 @@ function Logo({ claro = false }) {
 }
 
 export default function MarcoPublico({ titulo, subtitulo, ancho = 'max-w-sm', children }) {
+  const { pathname } = useLocation();
+
   return (
     <div className="tono-rojo min-h-dvh bg-fondo lg:grid lg:grid-cols-2">
       <aside className="hidden bg-red-700 text-white lg:block">
@@ -54,6 +56,11 @@ export default function MarcoPublico({ titulo, subtitulo, ancho = 'max-w-sm', ch
             {subtitulo && <p className="mt-1 text-sm text-gray-600">{subtitulo}</p>}
             <div className="mt-6">{children}</div>
           </div>
+          {pathname !== '/privacidad' && (
+            <p className="mt-4 text-center text-xs text-gray-600">
+              <Link to="/privacidad" className="underline hover:text-gray-900">Aviso de privacidad</Link>
+            </p>
+          )}
         </div>
       </div>
     </div>

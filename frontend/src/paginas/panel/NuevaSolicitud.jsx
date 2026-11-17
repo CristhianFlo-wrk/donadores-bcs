@@ -1,18 +1,22 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Minus, Plus } from 'lucide-react';
 import { hospitales, notificaciones, solicitudes, ubicaciones } from '../../api/servicios.js';
 import { useConsulta } from '../../hooks/useConsulta.js';
 import { useSesion } from '../../contexto/SesionContext.jsx';
-import { AreaTexto, Aviso, Boton, Cargando, EncabezadoPagina, FichaSangre, Panel, Selector } from '../../componentes/ui.jsx';
+import { AreaTexto, Aviso, Boton, Cargando, EncabezadoPagina, FichaSangre, Panel, Selector, SelectorUnidades } from '../../componentes/ui.jsx';
 import { puedeRecibirDe } from '../../utils/compatibilidad.js';
 
-const UNIDADES_MAXIMAS = 20;
-
 const URGENCIAS = [
+  { valor: 'normal', titulo: 'Programada', detalle: 'Cirugía o tratamiento programado. Se avisa a donantes de la región del hospital.' },
   { valor: 'urgente', titulo: 'Urgente', detalle: 'Se avisa a donantes de la región del hospital.' },
   { valor: 'critica', titulo: 'Crítica', detalle: 'Se avisa a donantes compatibles de todo el estado.' }
 ];
+
+const ANILLO_URGENCIA = {
+  critica: 'bg-red-50 ring-2 ring-red-600',
+  urgente: 'bg-amber-50 ring-2 ring-amber-500',
+  normal: 'bg-gray-50 ring-2 ring-gray-500'
+};
 
 // Pensado para completarse en menos de un minuto: dos toques y enviar
 export default function NuevaSolicitud() {
@@ -107,12 +111,12 @@ export default function NuevaSolicitud() {
             <Panel titulo="Prioridad">
               <fieldset>
                 <legend className="sr-only">Prioridad</legend>
-                <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-1">
+                <div className="grid gap-2 sm:grid-cols-3 2xl:grid-cols-1">
                   {URGENCIAS.map((u) => (
                     <label
                       key={u.valor}
                       className={'cursor-pointer rounded-lg p-4 ring-inset transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-acento-600 ' +
-                        (urgencia === u.valor ? (u.valor === 'critica' ? 'bg-red-50 ring-2 ring-red-600' : 'bg-amber-50 ring-2 ring-amber-500') : 'bg-white ring-1 ring-gray-200 hover:bg-gray-50')}
+                        (urgencia === u.valor ? ANILLO_URGENCIA[u.valor] : 'bg-white ring-1 ring-gray-200 hover:bg-gray-50')}
                     >
                       <input type="radio" name="urgencia" value={u.valor} className="sr-only" checked={urgencia === u.valor} onChange={(e) => setUrgencia(e.target.value)} />
                       <span className="block text-sm font-semibold text-gray-900">{u.titulo}</span>
@@ -125,30 +129,7 @@ export default function NuevaSolicitud() {
 
             <Panel titulo="Detalle">
               <div className="space-y-5">
-                <div>
-                  <p id="etiqueta-unidades" className="mb-1.5 text-sm font-medium text-gray-800">Unidades requeridas</p>
-                  <div className="inline-flex items-center rounded-lg bg-white ring-1 ring-inset ring-gray-300" role="group" aria-labelledby="etiqueta-unidades">
-                    <button
-                      type="button"
-                      onClick={() => setUnidades((u) => Math.max(1, u - 1))}
-                      disabled={unidades <= 1}
-                      aria-label="Una unidad menos"
-                      className="flex size-11 items-center justify-center rounded-l-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                    >
-                      <Minus className="size-4" aria-hidden="true" />
-                    </button>
-                    <output aria-live="polite" className="w-12 text-center text-lg font-bold text-gray-900">{unidades}</output>
-                    <button
-                      type="button"
-                      onClick={() => setUnidades((u) => Math.min(UNIDADES_MAXIMAS, u + 1))}
-                      disabled={unidades >= UNIDADES_MAXIMAS}
-                      aria-label="Una unidad más"
-                      className="flex size-11 items-center justify-center rounded-r-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                    >
-                      <Plus className="size-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                </div>
+                <SelectorUnidades valor={unidades} alCambiar={setUnidades} />
                 <AreaTexto
                   etiqueta="Descripción (opcional)"
                   id="descripcion"

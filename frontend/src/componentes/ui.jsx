@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
-import { ArrowLeft, LoaderCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, Eye, EyeOff, LoaderCircle, Minus, Plus, X } from 'lucide-react';
 
 
 const VARIANTES_BOTON = {
@@ -80,7 +81,7 @@ export function EncabezadoPagina({ titulo, descripcion, acciones, volver, antes 
   return (
     <div className="mb-6">
       {volver && (
-        <Link to={volver.ruta} className="mb-2 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800">
+        <Link to={volver.ruta} className="mb-1 inline-flex items-center gap-1 py-1 text-sm text-gray-500 hover:text-gray-800">
           <ArrowLeft className="size-4" aria-hidden="true" />
           {volver.texto}
         </Link>
@@ -177,11 +178,11 @@ export function BarraProgreso({ valor, maximo, etiqueta, className = '' }) {
   );
 }
 
-// Pestanas subrayadas sobre una linea; se desplazan de lado en celular sin mover la pagina
+// Pestanas subrayadas; en celular bajan a otra linea en vez de esconderse tras un scroll invisible
 export function Pestanas({ opciones, valor, alCambiar, etiqueta }) {
   return (
     <div className="border-b border-gray-200">
-      <div className="-mb-px flex gap-6 overflow-x-auto [scrollbar-width:none]" role="tablist" aria-label={etiqueta}>
+      <div className="-mb-px flex flex-wrap gap-x-6" role="tablist" aria-label={etiqueta}>
         {opciones.map((o) => (
           <button
             key={o.texto}
@@ -201,11 +202,35 @@ export function Pestanas({ opciones, valor, alCambiar, etiqueta }) {
 
 const CLASES_CAMPO = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-acento-600 focus:outline-none focus:ring-2 focus:ring-acento-100 disabled:bg-gray-50';
 
-export function Campo({ etiqueta, id, ayuda, error, className = '', ...resto }) {
+export function Campo({ etiqueta, id, ayuda, error, className = '', type, ...resto }) {
+  const [visible, setVisible] = useState(false);
+  const esPassword = type === 'password';
+  const entrada = (
+    <input
+      id={id}
+      type={esPassword && visible ? 'text' : type}
+      className={CLASES_CAMPO + (esPassword ? ' pr-11' : '')}
+      aria-invalid={Boolean(error)}
+      {...resto}
+    />
+  );
   return (
     <div className={className}>
       <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-gray-800">{etiqueta}</label>
-      <input id={id} className={CLASES_CAMPO} aria-invalid={Boolean(error)} {...resto} />
+      {esPassword ? (
+        <div className="relative">
+          {entrada}
+          <button
+            type="button"
+            onClick={() => setVisible((actual) => !actual)}
+            aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            aria-pressed={visible}
+            className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-gray-500 hover:text-gray-800 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-acento-600"
+          >
+            {visible ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+          </button>
+        </div>
+      ) : entrada}
       {ayuda && !error && <p className="mt-1 text-xs text-gray-500">{ayuda}</p>}
       {error && <p className="mt-1 text-xs text-red-700">{error}</p>}
     </div>
@@ -236,6 +261,49 @@ export function Selector({ etiqueta, id, opciones, vacio = 'Selecciona una opci�
   );
 }
 
+// Si la lista de colonias no llega, se dice y se ofrece reintentar en vez de dejar el selector vacio
+export function ErrorColonias({ alReintentar }) {
+  return (
+    <p role="alert" className="mt-1 text-xs text-red-700">
+      No se pudieron cargar las colonias. Revisa tu conexión.{' '}
+      <button type="button" onClick={alReintentar} className="rounded py-1 font-semibold underline hover:text-red-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">
+        Reintentar
+      </button>
+    </p>
+  );
+}
+
+// Contador de unidades con botones de menos y mas
+// Borde real con overflow-hidden: con ring-inset el fondo del boton en hover tapaba el borde del grupo
+export function SelectorUnidades({ valor, alCambiar, maximo = 20 }) {
+  return (
+    <div>
+      <p id="etiqueta-unidades" className="mb-1.5 text-sm font-medium text-gray-800">Unidades requeridas</p>
+      <div className="inline-flex items-center overflow-hidden rounded-lg border border-gray-300 bg-white" role="group" aria-labelledby="etiqueta-unidades">
+        <button
+          type="button"
+          onClick={() => alCambiar(Math.max(1, valor - 1))}
+          disabled={valor <= 1}
+          aria-label="Una unidad menos"
+          className="flex size-11 items-center justify-center rounded-l-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+        >
+          <Minus className="size-4" aria-hidden="true" />
+        </button>
+        <output aria-live="polite" className="w-12 text-center text-lg font-bold text-gray-900">{valor}</output>
+        <button
+          type="button"
+          onClick={() => alCambiar(Math.min(maximo, valor + 1))}
+          disabled={valor >= maximo}
+          aria-label="Una unidad más"
+          className="flex size-11 items-center justify-center rounded-r-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+        >
+          <Plus className="size-4" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const TONOS_AVISO = {
   error: 'border-red-200 bg-red-50 text-red-800',
   exito: 'border-emerald-200 bg-emerald-50 text-emerald-800',
@@ -248,6 +316,39 @@ export function Aviso({ tono = 'error', children, className = '' }) {
   return (
     <div role={tono === 'error' ? 'alert' : 'status'} className={'rounded-lg border px-3 py-2 text-sm ' + TONOS_AVISO[tono] + ' ' + className}>
       {children}
+    </div>
+  );
+}
+
+// Ventana sobre la pagina: hoja inferior en celular, centrada desde sm. Se cierra con Escape, con la X o tocando fuera.
+// Se monta dentro del marco para heredar el acento del rol; el color de texto se fija porque puede abrirse sobre un bloque de acento
+export function Dialogo({ id, titulo, subtitulo, alCerrar, className = 'max-w-lg', children }) {
+  useEffect(() => {
+    const alTeclear = (evento) => evento.key === 'Escape' && alCerrar();
+    document.addEventListener('keydown', alTeclear);
+    return () => document.removeEventListener('keydown', alTeclear);
+  }, [alCerrar]);
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-end justify-center bg-gray-900/40 p-0 sm:items-center sm:p-4" onClick={alCerrar}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={id}
+        className={'max-h-[85dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 text-left text-sm text-gray-900 shadow-xl sm:rounded-xl ' + className}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 id={id} className="text-base font-bold text-gray-900">{titulo}</h3>
+            {subtitulo && <p className="text-sm text-gray-600">{subtitulo}</p>}
+          </div>
+          <button type="button" onClick={alCerrar} aria-label="Cerrar" className="rounded-lg p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700">
+            <X className="size-5" />
+          </button>
+        </div>
+        {children}
+      </div>
     </div>
   );
 }

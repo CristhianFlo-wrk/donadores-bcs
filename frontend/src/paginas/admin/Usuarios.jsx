@@ -1,27 +1,47 @@
 import { useState } from 'react';
 import { auth, hospitales } from '../../api/servicios.js';
 import { useConsulta } from '../../hooks/useConsulta.js';
+import { useRetraso } from '../../hooks/useRetraso.js';
 import { useSesion } from '../../contexto/SesionContext.jsx';
-import { Aviso, Badge, Boton, Campo, EncabezadoPagina, EstadoConsulta, Panel, Pestanas, Selector } from '../../componentes/ui.jsx';
+import { Aviso, Badge, Boton, Campo, EncabezadoPagina, EstadoConsulta, Panel, Pestanas, Selector, Vacio } from '../../componentes/ui.jsx';
 import { fechaCorta } from '../../utils/formato.js';
 
 const FILTROS_ROL = [
   { valor: '', texto: 'Todos' },
   { valor: 'hospital', texto: 'Hospitales' },
   { valor: 'admin', texto: 'Administradores' },
+  { valor: 'auditor', texto: 'Auditores' },
   { valor: 'donante', texto: 'Donantes' }
 ];
 
-const TONO_ROL = { admin: 'gris', hospital: 'azul', donante: 'rojo' };
-const NOMBRE_ROL = { admin: 'Administrador', hospital: 'Hospital', donante: 'Donante' };
+// Lo que devuelve la API sin limite explicito
+const LIMITE_LISTA = 50;
+
+const TONO_ROL ={ admin: 'gris', hospital: 'azul', donante: 'rojo', auditor: 'verde' };
+const NOMBRE_ROL = { admin: 'Administrador', hospital: 'Hospital', donante: 'Donante', auditor: 'Auditor' };
 
 export default function Usuarios() {
   const { usuario: yo } = useSesion();
   const [rol, setRol] = useState('');
+  const [correo, setCorreo] = useState('');
+  const [activo, setActivo] = useState('');
+  const [idHospital, setIdHospital] = useState('');
   const [aviso, setAviso] = useState(null);
-  const consulta = useConsulta(() => auth.usuarios(rol), [rol]);
+  const correoRetrasado = useRetraso(correo.trim());
+  // Solo las cuentas de hospital tienen hospital: con otro rol el filtro no aplica
+  const filtraHospital = rol === '' || rol === 'hospital';
+  const filtros = { rol, correo: correoRetrasado, activo, id_hospital: filtraHospital ? idHospital : '' };
+  const consulta = useConsulta(() => auth.usuarios(filtros), [JSON.stringify(filtros)]);
   const consultaHospitales = useConsulta(() => hospitales.listar());
-  const nombresHospital = Object.fromEntries((consultaHospitales.datos?.hospitales || []).map((h) => [h.id, h.nombre]));
+  const listaHospitales = consultaHospitales.datos?.hospitales || [];
+  const nombresHospital = Object.fromEntries(listaHospitales.map((h) => [h.id, h.nombre]));
+  const hayFiltros = correo !== '' || activo !== '' || idHospital !== '';
+
+  function limpiar() {
+    setCorreo('');
+    setActivo('');
+    setIdHospital('');
+  }
 
   async function cambiarActivo(usuario) {
     setAviso(null);
@@ -40,14 +60,48 @@ export default function Usuarios() {
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="min-w-0">
           <Pestanas opciones={FILTROS_ROL} valor={rol} alCambiar={setRol} etiqueta="Filtrar por rol" />
+
+          <div className="mt-4 grid grid-cols-1 items-end gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto]" role="search" aria-label="Buscar cuentas">
+            <Campo
+              etiqueta="Buscar por correo"
+              id="buscar-correo"
+              type="search"
+              placeholder="Correo o parte de él"
+              className="sm:col-span-2 lg:col-span-1"
+              value={correo}
+              onChange={(e) => setCorreo(e.target.value)}
+            />
+            <Selector
+              etiqueta="Estado"
+              id="filtro-activo"
+              vacio="Activas e inactivas"
+              opciones={[{ valor: 'true', texto: 'Solo activas' }, { valor: 'false', texto: 'Solo inactivas' }]}
+              value={activo}
+              onChange={(e) => setActivo(e.target.value)}
+            />
+            <Selector
+              etiqueta="Hospital"
+              id="filtro-hospital-usuario"
+              vacio="Todos los hospitales"
+              opciones={listaHospitales.map((h) => ({ valor: String(h.id), texto: h.nombre }))}
+              value={filtraHospital ? idHospital : ''}
+              disabled={!filtraHospital}
+              onChange={(e) => setIdHospital(e.target.value)}
+            />
+            {hayFiltros && <Boton variante="contorno" className="sm:col-span-2 lg:col-span-1" onClick={limpiar}>Limpiar</Boton>}
+          </div>
+
           {aviso && <Aviso tono={aviso.tono} className="mt-4">{aviso.texto}</Aviso>}
 
           <div className="mt-4">
             <EstadoConsulta consulta={consulta}>
-              {({ usuarios }) => (
+              {({ usuarios }) => usuarios.length === 0 ? (
+                <Vacio titulo="Ninguna cuenta coincide">Prueba con otra parte del correo o quita algún filtro.</Vacio>
+              ) : (
                 <div className="rounded-xl border border-gray-200 bg-white">
                   <p className="border-b border-gray-100 px-5 py-3 text-sm text-gray-600">
                     {usuarios.length} {usuarios.length === 1 ? 'cuenta' : 'cuentas'}
+                    {usuarios.length === LIMITE_LISTA && ' (las ' + LIMITE_LISTA + ' más recientes; busca por correo para encontrar otras)'}
                   </p>
                   <ul className="divide-y divide-gray-100 md:hidden">
                     {usuarios.map((u) => (
@@ -156,16 +210,16 @@ function FormularioUsuario({ hospitalesLista, alCrear }) {
   }
 
   return (
-    <Panel titulo="Nueva cuenta" detalle="Solo hospitales y administradores" className="xl:sticky xl:top-8">
+    <Panel titulo="Nueva cuenta" detalle="Hospitales, administradores y auditores" className="xl:sticky xl:top-8">
         <form onSubmit={crear} className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
           <Selector
             etiqueta="Rol"
             id="rol"
-            className={rol === 'admin' ? 'md:col-span-2 xl:col-span-1' : ''}
+            className={rol !== 'hospital' ? 'md:col-span-2 xl:col-span-1' : ''}
             value={rol}
             onChange={(e) => setRol(e.target.value)}
             vacio="Selecciona un rol"
-            opciones={[{ valor: 'hospital', texto: 'Hospital' }, { valor: 'admin', texto: 'Administrador' }]}
+            opciones={[{ valor: 'hospital', texto: 'Hospital' }, { valor: 'admin', texto: 'Administrador' }, { valor: 'auditor', texto: 'Auditor (solo lectura de la auditoría)' }]}
           />
           {rol === 'hospital' && (
             <Selector

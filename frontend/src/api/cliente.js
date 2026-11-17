@@ -64,7 +64,7 @@ export async function peticion(metodo, ruta, cuerpo) {
     if (respuesta.status === 429) {
       const segundos = Number(respuesta.headers.get('Retry-After')) || 900;
       const minutos = Math.ceil(segundos / 60);
-      throw new ErrorApi(429, 'Demasiados intentos. Espera ' + minutos + ' minutos antes de volver a intentar.');
+      throw new ErrorApi(429, 'Demasiadas peticiones. Espera ' + minutos + (minutos === 1 ? ' minuto' : ' minutos') + ' antes de volver a intentar.');
     }
     throw new ErrorApi(respuesta.status, datos?.error || 'Error inesperado del servidor');
   }
@@ -72,9 +72,25 @@ export async function peticion(metodo, ruta, cuerpo) {
   return datos;
 }
 
+export async function pedirArchivo(ruta) {
+  const token = leerToken();
+  let respuesta;
+  try {
+    respuesta = await fetch(BASE + ruta, { headers: token ? { Authorization: 'Bearer ' + token } : {} });
+  } catch {
+    throw new ErrorApi(0, 'No se pudo conectar con el servidor.');
+  }
+  if (!respuesta.ok) {
+    if (respuesta.status === 401 && token && alExpirarSesion) alExpirarSesion();
+    throw new ErrorApi(respuesta.status, 'No se pudo cargar el archivo');
+  }
+  return respuesta.blob();
+}
+
 export const api = {
   get: (ruta) => peticion('GET', ruta),
   post: (ruta, cuerpo = {}) => peticion('POST', ruta, cuerpo),
   put: (ruta, cuerpo = {}) => peticion('PUT', ruta, cuerpo),
-  patch: (ruta, cuerpo = {}) => peticion('PATCH', ruta, cuerpo)
+  patch: (ruta, cuerpo = {}) => peticion('PATCH', ruta, cuerpo),
+  delete: (ruta) => peticion('DELETE', ruta)
 };

@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'backend/**'
+      - 'frontend/src/paginas/publico/Privacidad.jsx'
       - '.github/workflows/tests.yml'
   pull_request:
     paths:
       - 'backend/**'
+      - 'frontend/src/paginas/publico/Privacidad.jsx'
       - '.github/workflows/tests.yml'
 
 jobs:

@@ -253,7 +253,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{donanteEmail}}\",\n  \"password\": \"{{donantePassword}}\",\n  \"nombre_completo\": \"Juan Perez Lopez\",\n  \"curp\": \"PELJ950520HBSRPN09\",\n  \"fecha_nacimiento\": \"1995-05-20\",\n  \"sexo\": \"M\",\n  \"telefono\": \"6121234567\",\n  \"id_tipo_sangre\": 1,\n  \"id_colonia\": 11,\n  \"peso_kg\": 72\n}"
+              "raw": "{\n  \"email\": \"{{donanteEmail}}\",\n  \"password\": \"{{donantePassword}}\",\n  \"nombre_completo\": \"Juan Perez Lopez\",\n  \"curp\": \"PELJ950520HBSRPN09\",\n  \"fecha_nacimiento\": \"1995-05-20\",\n  \"sexo\": \"M\",\n  \"telefono\": \"6121234567\",\n  \"id_tipo_sangre\": 1,\n  \"id_colonia\": 11,\n  \"peso_kg\": 72,\n  \"acepta_privacidad\": true\n}"
             },
             "description": "Si el donante ya existe responde 400; en ese caso basta con hacer login."
           },
@@ -763,6 +763,56 @@
           ]
         },
         {
+          "name": "Ofrecerse a una solicitud",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notificaciones/ofrecerme",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notificaciones",
+                "ofrecerme"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenDonante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_solicitud\": {{idSolicitud}}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('201 nueva o 200 si ya estaba notificado', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test('devuelve la notificacion de la solicitud', () => pm.expect(cuerpo.notificacion.id).to.eql(Number(pm.collectionVariables.get('idNotificacion'))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Confirmar asistencia",
           "request": {
             "method": "PATCH",
@@ -894,7 +944,12 @@
           "name": "Registrar donacion",
           "request": {
             "method": "PATCH",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/notificaciones/{{idNotificacion}}/donacion",
               "host": [
@@ -916,7 +971,17 @@
                   "type": "string"
                 }
               ]
-            }
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"curp\": \"PELJ950520HBSRPN09\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "El hospital escribe la CURP de la identificacion de quien llego; debe coincidir con la del donante que confirmo."
           },
           "event": [
             {
@@ -1330,6 +1395,314 @@
           ]
         },
         {
+          "name": "Crear hospital",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/hospitales",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "hospitales"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAdmin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Hospital de prueba {{$timestamp}}\",\n  \"institucion\": \"IMSS-BIENESTAR\",\n  \"id_municipio\": 1,\n  \"direccion\": \"Av. Baja California S/N, Guerrero Negro, BCS\",\n  \"telefono\": \"6151570000\",\n  \"latitud\": 27.9677,\n  \"longitud\": -114.0563\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 creado', () => pm.response.to.have.status(201));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('ok es true', () => pm.expect(cuerpo.ok).to.eql(true));",
+                  "pm.test('devuelve hospital', () => pm.expect(cuerpo.hospital.id).to.be.a('number'));",
+                  "if (cuerpo.ok) pm.collectionVariables.set('idHospitalNuevo', cuerpo.hospital.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear colonia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ubicaciones/colonias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ubicaciones",
+                "colonias"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAdmin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_municipio\": 4,\n  \"nombre\": \"Colonia de prueba {{$timestamp}}\",\n  \"codigo_postal\": \"23088\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 creado', () => pm.response.to.have.status(201));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('ok es true', () => pm.expect(cuerpo.ok).to.eql(true));",
+                  "pm.test('devuelve colonia', () => pm.expect(cuerpo.colonia.id).to.be.a('number'));",
+                  "if (cuerpo.ok) pm.collectionVariables.set('idColoniaNueva', cuerpo.colonia.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Editar hospital",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/hospitales/{{idHospitalNuevo}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "hospitales",
+                "{{idHospitalNuevo}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAdmin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telefono\": \"6151570001\",\n  \"id_municipio\": 2\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('la region sale del municipio', () => pm.expect(cuerpo.hospital.region).to.eql('centro'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Desactivar hospital",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/hospitales/{{idHospitalNuevo}}/activo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "hospitales",
+                "{{idHospitalNuevo}}",
+                "activo"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAdmin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activo\": false\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('queda inactivo', () => pm.expect(cuerpo.hospital.activo).to.eql(false));",
+                  "pm.test('informa las cuentas desactivadas', () => pm.expect(cuerpo.cuentas_desactivadas).to.be.a('number'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Editar colonia",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ubicaciones/colonias/{{idColoniaNueva}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ubicaciones",
+                "colonias",
+                "{{idColoniaNueva}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAdmin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigo_postal\": \"23089\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('guarda el codigo postal', () => pm.expect(cuerpo.colonia.codigo_postal).to.eql('23089'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Desactivar colonia",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ubicaciones/colonias/{{idColoniaNueva}}/activo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ubicaciones",
+                "colonias",
+                "{{idColoniaNueva}}",
+                "activo"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAdmin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activo\": false\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('queda inactiva', () => pm.expect(cuerpo.colonia.activo).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Estado de la auditoria",
           "request": {
             "method": "GET",
@@ -1363,6 +1736,200 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('ok es true', () => pm.expect(pm.response.json().ok).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bitacora de auditoria",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auditoria/bitacora?limite=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auditoria",
+                "bitacora"
+              ],
+              "query": [
+                {
+                  "key": "limite",
+                  "value": "20"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAdmin}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('ok es true', () => pm.expect(pm.response.json().ok).to.eql(true));",
+                  "pm.test('trae entradas con accion y fecha', () => {",
+                  "  const entradas = pm.response.json().entradas;",
+                  "  pm.expect(entradas.length).to.be.above(0);",
+                  "  pm.expect(entradas[0]).to.have.property('accion');",
+                  "  pm.expect(entradas[0]).to.have.property('fecha');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Eslabon de un registro",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auditoria/bitacora/1/eslabon",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auditoria",
+                "bitacora",
+                "1",
+                "eslabon"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAdmin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Todo lo que entro al sello del registro, el sello anterior y si coincide; el frontend lo recalcula en el navegador."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('ok es true', () => pm.expect(pm.response.json().ok).to.eql(true));",
+                  "pm.test('trae campos y sellos', () => {",
+                  "  const e = pm.response.json().eslabon;",
+                  "  pm.expect(e.campos).to.have.property('accion');",
+                  "  pm.expect(e.sello).to.match(/^[0-9a-f]{64}$/);",
+                  "  pm.expect(e.coincide_servidor).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Emitir constancia",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auditoria/constancias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auditoria",
+                "constancias"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAdmin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Recalcula todos los sellos y certifica los registros actuales. Guarda los datos para el request siguiente."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 201', () => pm.response.to.have.status(201));",
+                  "const c = pm.response.json().constancia;",
+                  "pm.collectionVariables.set('constanciaLogs', c.logs_hasta);",
+                  "pm.collectionVariables.set('constanciaDonaciones', c.donaciones_hasta);",
+                  "pm.collectionVariables.set('constanciaSello', c.sello);",
+                  "pm.test('trae folio y sello', () => { pm.expect(c.folio).to.be.above(0); pm.expect(c.sello).to.match(/^[0-9a-f]{64}$/); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Comprobar constancia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auditoria/constancias/comprobar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auditoria",
+                "constancias",
+                "comprobar"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAdmin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"logs_hasta\": \"{{constanciaLogs}}\",\n  \"donaciones_hasta\": \"{{constanciaDonaciones}}\",\n  \"sello\": \"{{constanciaSello}}\"\n}"
+            },
+            "description": "Con los datos de una constancia impresa: responde coincide, sello_distinto, registro_inexistente o cadena_alterada."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('la constancia coincide', () => pm.expect(pm.response.json().comprobacion.resultado).to.eql('coincide'));"
                 ]
               }
             }
@@ -1537,7 +2104,12 @@
           "name": "Registrar donacion dos veces -> 400",
           "request": {
             "method": "PATCH",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/notificaciones/{{idNotificacion}}/donacion",
               "host": [
@@ -1559,6 +2131,15 @@
                   "type": "string"
                 }
               ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"curp\": \"PELJ950520HBSRPN09\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "event": [
@@ -1601,6 +2182,314 @@
                 "exec": [
                   "pm.test('responde 404', () => pm.response.to.have.status(404));",
                   "pm.test('ok es false', () => pm.expect(pm.response.json().ok).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Solicitudes ciudadanas",
+      "item": [
+        {
+          "name": "Pedir sangre (donante)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/solicitudes/ciudadana",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "solicitudes",
+                "ciudadana"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenDonante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"consentimiento\": true,\n  \"para_si_mismo\": false,\n  \"paciente_nombre\": \"Ana Lopez\",\n  \"paciente_expediente\": \"EXP-123\",\n  \"id_hospital\": 1,\n  \"id_tipo_sangre\": 1,\n  \"urgencia\": \"critica\",\n  \"unidades_requeridas\": 2,\n  \"descripcion\": \"Cirugia de emergencia\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 201', () => pm.response.to.have.status(201));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('nace por confirmar con la urgencia pedida', () => {",
+                  "  pm.expect(cuerpo.solicitud.urgencia).to.eql('critica');",
+                  "  pm.expect(cuerpo.solicitud.por_confirmar).to.eql(true);",
+                  "});",
+                  "pm.test('el autor ve el expediente', () => pm.expect(cuerpo.solicitud.paciente.expediente).to.eql('EXP-123'));",
+                  "pm.test('no avisa a nadie hasta que el hospital la confirme', () => pm.expect(cuerpo.notificaciones_enviadas).to.eql(undefined));",
+                  "if (cuerpo.ok) pm.collectionVariables.set('idCiudadana', cuerpo.solicitud.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mis solicitudes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/solicitudes/mias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "solicitudes",
+                "mias"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenDonante}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "const activa = cuerpo.solicitudes.find((s) => s.id === Number(pm.collectionVariables.get('idCiudadana')));",
+                  "pm.test('aparece la solicitud activa', () => pm.expect(activa.estado).to.eql('activa'));",
+                  "pm.test('sin faltas', () => pm.expect(cuerpo.faltas).to.eql(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Detalle ciudadana (hospital ve expediente)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/solicitudes/{{idCiudadana}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "solicitudes",
+                "{{idCiudadana}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenHospital}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const solicitud = pm.response.json().solicitud;",
+                  "pm.test('es ciudadana', () => pm.expect(solicitud.ciudadana).to.eql(true));",
+                  "pm.test('el hospital elegido ve nombre y expediente', () => {",
+                  "  pm.expect(solicitud.paciente.nombre).to.eql('Ana Lopez');",
+                  "  pm.expect(solicitud.paciente.expediente).to.eql('EXP-123');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirmar solicitud como crítica (hospital)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/solicitudes/{{idCiudadana}}/urgencia",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "solicitudes",
+                "{{idCiudadana}}",
+                "urgencia"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenHospital}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"urgencia\": \"critica\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('queda critica y confirmada', () => {",
+                  "  pm.expect(cuerpo.solicitud.urgencia).to.eql('critica');",
+                  "  pm.expect(cuerpo.solicitud.por_confirmar).to.eql(false);",
+                  "});",
+                  "pm.test('al confirmar avisa a los donantes', () => pm.expect(cuerpo.notificaciones_enviadas).to.be.a('number'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Segunda solicitud activa -> 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/solicitudes/ciudadana",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "solicitudes",
+                "ciudadana"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenDonante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"consentimiento\": true,\n  \"para_si_mismo\": true,\n  \"paciente_nombre\": \"Juan Perez\",\n  \"id_hospital\": 1,\n  \"id_tipo_sangre\": 1,\n  \"urgencia\": \"normal\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('ok es false', () => pm.expect(pm.response.json().ok).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancelar mi solicitud",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/solicitudes/{{idCiudadana}}/cerrar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "solicitudes",
+                "{{idCiudadana}}",
+                "cerrar"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenDonante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"cancelada\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 200', () => pm.response.to.have.status(200));",
+                  "const solicitud = pm.response.json().solicitud;",
+                  "pm.test('queda cancelada', () => pm.expect(solicitud.estado).to.eql('cancelada'));",
+                  "pm.test('sin notificaciones ni expediente para el autor', () => {",
+                  "  pm.expect(solicitud.notificaciones).to.eql(undefined);",
+                  "  pm.expect(solicitud.paciente.expediente).to.eql(undefined);",
+                  "});"
                 ]
               }
             }
@@ -1660,6 +2549,18 @@
     },
     {
       "key": "idUsuarioNuevo",
+      "value": ""
+    },
+    {
+      "key": "idCiudadana",
+      "value": ""
+    },
+    {
+      "key": "idHospitalNuevo",
+      "value": ""
+    },
+    {
+      "key": "idColoniaNueva",
       "value": ""
     }
   ]

@@ -29,10 +29,25 @@ export async function postUsuario(req, res) {
   res.status(201).json({ ok: true, usuario });
 }
 
+const VALORES_ACTIVO = { true: true, false: false };
+
 export async function getUsuarios(req, res) {
+  const correo = typeof req.query.correo === 'string' ? req.query.correo.trim() : '';
+  if (correo.length > 150) {
+    throw errorValidacion('correo admite como maximo 150 caracteres');
+  }
+  const { activo } = req.query;
+  const filtraActivo = activo !== undefined && activo !== '';
+  if (filtraActivo && !Object.hasOwn(VALORES_ACTIVO, activo)) {
+    throw errorValidacion('activo debe ser "true" o "false"');
+  }
+
   const usuarios = await listarUsuarios({
     rol: req.query.rol || null,
-    limite: parsearLimite(req.query.limite)
+    limite: parsearLimite(req.query.limite),
+    correo: correo || null,
+    activo: filtraActivo ? VALORES_ACTIVO[activo] : null,
+    idHospital: req.query.id_hospital ? parsearId(req.query.id_hospital, 'id_hospital') : null
   });
   res.json({ ok: true, total: usuarios.length, usuarios });
 }

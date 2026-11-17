@@ -80,6 +80,8 @@ describe('PUT /api/donantes/perfil', () => {
       { peso_kg: null },
       { nombre_completo: '  ' },
       { id_tipo_sangre: 99 },
+      // Un tipo valido tampoco: decide a quien se avisa y no lo cambia el propio donante
+      { id_tipo_sangre: 2 },
       { latitud: 200 },
       { colonia_personalizada: 'Sin id_colonia' },
       { id_colonia: await idColonia('Otra', 'Loreto') }
@@ -130,7 +132,14 @@ describe('buscarCompatibles', () => {
     assert.ok(!ids.includes(abPositivo.id_donante));
     assert.ok(!ids.includes(noDisponible.id_donante));
     assert.ok(!ids.includes(donoReciente.id_donante));
-    assert.equal(compatibles[0].tipo_sangre, 'O-');
+  });
+
+  it('ordena primero el mismo tipo que se pide y deja al O- (el mas escaso) al final', async () => {
+    await crearDonante(app, request, { id_tipo_sangre: 4 });
+    const tipos = (await buscarCompatibles(4)).map((d) => d.tipo_sangre);
+    assert.equal(tipos[0], 'A+');
+    assert.equal(tipos[tipos.length - 1], 'O-');
+    assert.ok(tipos.indexOf('O-') > tipos.lastIndexOf('A+'));
   });
 
   it('no devuelve datos identificables', async () => {
@@ -167,10 +176,10 @@ describe('GET /api/donantes/stats', () => {
     const { rows } = await query('SELECT curp_hash FROM donantes WHERE id = $1', [donante.id_donante]);
     const hash = rows[0].curp_hash;
     await query(`
-      INSERT INTO historial_donaciones (id_donante_hash, fecha_donacion, grupo_sanguineo, id_hospital, region, hash_anterior, hash_actual)
-      VALUES ($1, NOW() - INTERVAL '200 days', 'O-', 4, 'centro', $2, $3),
-             ($1, NOW() - INTERVAL '30 days', 'O-', 1, 'sur', $3, $4)
-    `, [hash, '0'.repeat(64), 'a'.repeat(64), 'b'.repeat(64)]);
+      INSERT INTO historial_donaciones (id_donante_hash, fecha_donacion, grupo_sanguineo, id_hospital, region, hash_actual)
+      VALUES ($1, NOW() - INTERVAL '200 days', 'O-', 4, 'centro', decode($2, 'hex')),
+             ($1, NOW() - INTERVAL '30 days', 'O-', 1, 'sur', decode($3, 'hex'))
+    `, [hash, 'a'.repeat(64), 'b'.repeat(64)]);
     await query("UPDATE donantes SET ultima_donacion = NOW() - INTERVAL '30 days' WHERE id = $1", [donante.id_donante]);
 
     const res = await request(app).get('/api/donantes/stats').set(bearer(donante.token));

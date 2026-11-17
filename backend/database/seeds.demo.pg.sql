@@ -3,7 +3,9 @@
 -- admin@demo.donadores.mx / Admin12345
 -- hospitalN@demo.donadores.mx / Hospital123 
 INSERT INTO usuarios (email, password_hash, rol, id_hospital) VALUES
-('admin@demo.donadores.mx', '$2b$10$hxnDCz6DGtREU438MjE4jOeFC4aanw60u2vTCA2Mxv6n1Jh4N/o/y', 'admin', NULL);
+('admin@demo.donadores.mx', '$2b$10$hxnDCz6DGtREU438MjE4jOeFC4aanw60u2vTCA2Mxv6n1Jh4N/o/y', 'admin', NULL),
+-- Auditor de solo lectura (contrasena Auditor123)
+('auditor@demo.donadores.mx', '$2b$10$HdzsM3NnU6fBV5LuD8ztCOjdfFHpdHyFrXtwH2xXZJ2xs74tPsmz2', 'auditor', NULL);
 
 INSERT INTO usuarios (email, password_hash, rol, id_hospital)
 SELECT 'hospital' || id || '@demo.donadores.mx',

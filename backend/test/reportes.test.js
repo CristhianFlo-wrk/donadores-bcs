@@ -28,7 +28,7 @@ before(async () => {
   await request(app).post('/api/notificaciones/notificar').set(bearer(tokenHospital1)).send({ id_solicitud: idCompletada });
   const { rows } = await query('SELECT id FROM notificaciones WHERE id_solicitud = $1 AND id_donante = $2', [idCompletada, donante.id_donante]);
   await request(app).patch(`/api/notificaciones/${rows[0].id}/responder`).set(bearer(donante.token)).send({ respuesta: 'confirmada' });
-  await request(app).patch(`/api/notificaciones/${rows[0].id}/donacion`).set(bearer(tokenHospital1));
+  await request(app).patch(`/api/notificaciones/${rows[0].id}/donacion`).set(bearer(tokenHospital1)).send({ curp: donante.curp });
   await request(app).patch(`/api/solicitudes/${idCompletada}/cerrar`).set(bearer(tokenHospital1)).send({ estado: 'completada' });
 
   await request(app).post('/api/solicitudes').set(bearer(tokenHospital1)).send({ id_tipo_sangre: 2, urgencia: 'critica' });
@@ -49,7 +49,7 @@ describe('GET /api/reportes/dashboard', () => {
     assert.equal(dashboard.donantes.disponibles, 4);
     // El que dono hace segundos no es apto por la regla de 90 dias
     assert.equal(dashboard.donantes.aptos, 3);
-    assert.deepEqual(dashboard.solicitudes, { total: 3, activas: 1, criticas_activas: 1, completadas: 1, canceladas: 1 });
+    assert.deepEqual(dashboard.solicitudes, { total: 3, activas: 1, criticas_activas: 1, completadas: 1, canceladas: 1, falsas: 0, caducadas: 0, por_confirmar: 0 });
     assert.equal(dashboard.donaciones_registradas, 1);
   });
 
@@ -82,7 +82,7 @@ describe('GET /api/reportes/dashboard', () => {
     // Un hospital no puede pedir los datos de otro con ?id_hospital
     const h4 = await request(app).get('/api/reportes/dashboard?id_hospital=1').set(bearer(tokenHospital4));
     assert.equal(h4.body.dashboard.id_hospital, 4);
-    assert.deepEqual(h4.body.dashboard.solicitudes, { total: 1, activas: 0, criticas_activas: 0, completadas: 0, canceladas: 1 });
+    assert.deepEqual(h4.body.dashboard.solicitudes, { total: 1, activas: 0, criticas_activas: 0, completadas: 0, canceladas: 1, falsas: 0, caducadas: 0, por_confirmar: 0 });
     assert.equal(h4.body.dashboard.solicitudes_atendidas.length, 0);
   });
 

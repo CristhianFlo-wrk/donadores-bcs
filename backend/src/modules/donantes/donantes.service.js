@@ -57,6 +57,11 @@ export async function obtenerPerfil(idUsuario) {
 
 // Actualiza solo los campos enviados; la colonia se revalida y recalcula la region
 export async function actualizarPerfil(idUsuario, cambios, contexto = {}) {
+  // El tipo de sangre decide a quien se avisa y entra al sello de cada donacion: no lo cambia el propio donante
+  if (cambios.id_tipo_sangre !== undefined) {
+    throw errorValidacion('El tipo de sangre no se puede cambiar desde el perfil');
+  }
+
   const campos = [];
   const valores = [];
   const agregar = (columna, valor) => {
@@ -96,15 +101,6 @@ export async function actualizarPerfil(idUsuario, cambios, contexto = {}) {
       agregar('id_colonia', colonia.idColonia);
       agregar('colonia_personalizada', colonia.coloniaPersonalizada);
       agregar('region', colonia.region);
-    }
-
-    if (cambios.id_tipo_sangre !== undefined) {
-      parsearId(cambios.id_tipo_sangre, 'id_tipo_sangre');
-      const tipo = await client.query('SELECT id FROM tipos_sangre WHERE id = $1', [cambios.id_tipo_sangre]);
-      if (tipo.rows.length === 0) {
-        throw errorValidacion('Tipo de sangre inválido');
-      }
-      agregar('id_tipo_sangre', cambios.id_tipo_sangre);
     }
 
     if (campos.length === 0) {
@@ -176,7 +172,7 @@ export async function actualizarFcmToken(idUsuario, fcmToken) {
 // Donantes compatibles con un tipo de sangre receptor, para hospitales y admin
 // Solo devuelve datos no identificables: sin nombre, CURP, telefono ni coordenadas exactas
 export async function buscarCompatibles(idTipoReceptor, filtros = {}) {
-  const { region = null, soloDisponibles = true, soloAptos = true, excluirSolicitud = null, limite = 50 } = filtros;
+  const { region = null, soloDisponibles = true, soloAptos = true, excluirSolicitud = null, excluirUsuario = null, limite = 50 } = filtros;
 
   const receptor = await query('SELECT id FROM tipos_sangre WHERE id = $1', [idTipoReceptor]);
   if (receptor.rows.length === 0) {
@@ -220,8 +216,14 @@ export async function buscarCompatibles(idTipoReceptor, filtros = {}) {
     sql += ` AND NOT EXISTS (SELECT 1 FROM notificaciones n WHERE n.id_solicitud = $${valores.length} AND n.id_donante = d.id)`;
   }
 
+  // El autor de una solicitud ciudadana no se notifica a si mismo
+  if (excluirUsuario) {
+    valores.push(excluirUsuario);
+    sql += ` AND d.id_usuario <> $${valores.length}`;
+  }
+
   valores.push(limite);
-  sql += ` ORDER BY ts.es_donante_universal DESC, d.created_at DESC LIMIT $${valores.length}`;
+  sql += ` ORDER BY (d.id_tipo_sangre = $1) DESC, ts.es_donante_universal ASC, d.created_at DESC LIMIT $${valores.length}`;
 
   const { rows } = await query(sql, valores);
   return rows;

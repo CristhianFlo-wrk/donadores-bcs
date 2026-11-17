@@ -34,3 +34,14 @@ export function parsearLimite(valor, { defecto = 50, maximo = 100 } = {}) {
   }
   return Math.min(numero, maximo);
 }
+
+export function parsearFecha(valor, nombre = 'fecha') {
+  if (valor === undefined || valor === null || valor === '') return null;
+  const texto = String(valor);
+  const fecha = new Date(texto + 'T00:00:00Z');
+  const valida = /^\d{4}-\d{2}-\d{2}$/.test(texto) && !Number.isNaN(fecha.getTime()) && fecha.toISOString().startsWith(texto);
+  if (!valida) {
+    throw errorValidacion(nombre + ' debe tener el formato AAAA-MM-DD');
+  }
+  return texto;
+}

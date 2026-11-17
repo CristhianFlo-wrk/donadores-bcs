@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { registrar, iniciarSesion, perfil, postUsuario, getUsuarios, patchActivo } from './auth.controller.js';
 import { verificarToken, soloRol } from '../../middleware/auth.js';
-import { limitarIntentosLogin } from '../../middleware/limiteIntentos.js';
+import { limitarIntentosLogin, limitarRegistro } from '../../middleware/limiteIntentos.js';
 
 const router = Router();
 
-router.post('/registro', registrar);
+router.post('/registro', limitarRegistro, registrar);
 router.post('/login', limitarIntentosLogin, iniciarSesion);
 router.get('/perfil', verificarToken, perfil);
 

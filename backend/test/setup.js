@@ -4,6 +4,11 @@ import 'dotenv/config';
 
 process.env.NODE_ENV = 'test';
 
+// Asignacion directa: un .env local con limites bajos no debe romper la suite
+process.env.LIMITE_GENERAL_POR_MINUTO = '100000';
+process.env.LIMITE_REGISTRO_POR_HORA = '100000';
+process.env.LIMITE_SOLICITUDES_POR_HORA = '100000';
+
 const urlOriginal = process.env.DATABASE_URL;
 if (!urlOriginal) {
   throw new Error('[ERROR] DATABASE_URL no configurada en .env');

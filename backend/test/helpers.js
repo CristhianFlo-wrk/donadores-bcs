@@ -63,6 +63,7 @@ export async function crearDonante(app, request, cambios = {}) {
     fecha_nacimiento: '1995-05-20',
     id_tipo_sangre: 1,
     id_colonia: await idColonia('Centro', 'La Paz'),
+    acepta_privacidad: true,
     ...cambios
   };
 
@@ -72,7 +73,8 @@ export async function crearDonante(app, request, cambios = {}) {
   }
 
   const login = await request(app).post('/api/auth/login').send({ email: datos.email, password: datos.password });
-  return { token: login.body.token, ...registro.body.usuario };
+  // La CURP se devuelve porque registrar la donacion la pide
+  return { token: login.body.token, curp: datos.curp, ...registro.body.usuario };
 }
 
 export async function loginDemo(app, request, email, password) {

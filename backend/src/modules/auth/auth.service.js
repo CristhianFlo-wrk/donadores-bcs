@@ -11,6 +11,8 @@ const REGEX_CURP = /^[A-Z]{4}\d{6}[HMX][A-Z]{5}[A-Z0-9]\d$/;
 const SEXOS = ['M', 'F', 'otro'];
 const MENSAJE_DUPLICADO = 'El email o CURP ya está registrado';
 
+export const VERSION_AVISO_PRIVACIDAD = '2026-11-09';
+
 // Validaciones que no requieren base de datos
 function validarDatosRegistro(datos) {
   const {
@@ -20,6 +22,11 @@ function validarDatosRegistro(datos) {
 
   if (!email || !password || !nombreCompleto || !curp || !fechaNacimiento || !idTipoSangre || !idColonia) {
     throw errorValidacion('Faltan campos obligatorios: email, password, nombre_completo, curp, fecha_nacimiento, id_tipo_sangre, id_colonia');
+  }
+
+  // Consentimiento expreso: se tratan datos de salud (tipo de sangre, peso, aptitud para donar)
+  if (datos.acepta_privacidad !== true) {
+    throw errorValidacion('Debes aceptar el aviso de privacidad para registrarte');
   }
 
   parsearId(idTipoSangre, 'id_tipo_sangre');
@@ -92,8 +99,8 @@ export async function registrarDonante(datos, contexto = {}) {
         INSERT INTO donantes (
           id_usuario, nombre_cifrado, curp_hash, fecha_nacimiento, sexo,
           telefono_cifrado, id_tipo_sangre, id_colonia, colonia_personalizada,
-          latitud, longitud, region, peso_kg
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          latitud, longitud, region, peso_kg, fecha_consentimiento
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
         RETURNING id
       `, [
         idUsuario,
@@ -114,7 +121,7 @@ export async function registrarDonante(datos, contexto = {}) {
       await registrarLog(client, {
         idUsuario,
         accion: 'REGISTRO_DONANTE',
-        detalles: { id_donante: donante.rows[0].id, region: colonia.region },
+        detalles: { id_donante: donante.rows[0].id, region: colonia.region, aviso_privacidad: VERSION_AVISO_PRIVACIDAD },
         ipOrigen: contexto.ip
       });
 
@@ -148,12 +155,10 @@ export async function login(email, password, contexto = {}) {
   const usuario = rows[0];
 
   if (!usuario || !(await verificarPassword(String(password), usuario.password_hash))) {
-    await registrarLog(null, {
-      idUsuario: usuario ? usuario.id : null,
-      accion: 'LOGIN_FALLIDO',
-      detalles: { email: String(email).trim().toLowerCase() },
-      ipOrigen: contexto.ip
-    });
+    
+    if (usuario) {
+      await registrarLog(null, { idUsuario: usuario.id, accion: 'LOGIN_FALLIDO', ipOrigen: contexto.ip });
+    }
     throw new ErrorHttp(401, 'Credenciales inválidas');
   }
 
@@ -176,9 +181,9 @@ export async function login(email, password, contexto = {}) {
   return { token, usuario: datosToken };
 }
 
-const ROLES_ADMINISTRADOS = ['hospital', 'admin'];
+const ROLES_ADMINISTRADOS = ['hospital', 'admin', 'auditor'];
 
-// Solo admin: crea cuentas de hospital o admin (los donantes se registran solos)
+// Solo admin: crea cuentas de hospital, admin o auditor (los donantes se registran solos)
 export async function crearUsuario(datos, contexto = {}) {
   const { email, password, rol } = datos;
 
@@ -192,7 +197,7 @@ export async function crearUsuario(datos, contexto = {}) {
     throw errorValidacion('La contraseña debe tener al menos 8 caracteres');
   }
   if (!ROLES_ADMINISTRADOS.includes(rol)) {
-    throw errorValidacion('rol debe ser "hospital" o "admin"');
+    throw errorValidacion('rol debe ser "hospital", "admin" o "auditor"');
   }
 
   let idHospital = null;
@@ -240,9 +245,9 @@ export async function crearUsuario(datos, contexto = {}) {
   }
 }
 
-export async function listarUsuarios({ rol = null, limite = 50 } = {}) {
+export async function listarUsuarios({ rol = null, limite = 50, correo = null, activo = null, idHospital = null } = {}) {
   if (rol && !['donante', ...ROLES_ADMINISTRADOS].includes(rol)) {
-    throw errorValidacion('rol debe ser donante, hospital o admin');
+    throw errorValidacion('rol debe ser donante, hospital, admin o auditor');
   }
 
   const valores = [];
@@ -251,8 +256,20 @@ export async function listarUsuarios({ rol = null, limite = 50 } = {}) {
     valores.push(rol);
     sql += ` AND rol = $${valores.length}`;
   }
+  if (correo) {
+    valores.push(correo);
+    sql += ` AND position(lower($${valores.length}) in lower(email)) > 0`;
+  }
+  if (activo !== null) {
+    valores.push(activo);
+    sql += ` AND activo = $${valores.length}`;
+  }
+  if (idHospital) {
+    valores.push(idHospital);
+    sql += ` AND id_hospital = $${valores.length}`;
+  }
   valores.push(limite);
-  sql += ` ORDER BY id ASC LIMIT $${valores.length}`;
+  sql += ` ORDER BY id DESC LIMIT $${valores.length}`;
 
   const { rows } = await query(sql, valores);
   return rows;

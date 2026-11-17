@@ -51,7 +51,7 @@ describe('POST /api/solicitudes', () => {
   });
 
   it('valida urgencia, tipo de sangre y hospital', async () => {
-    assert.equal((await crear(tokenHospital1, { id_tipo_sangre: 2, urgencia: 'normal' })).status, 400);
+    assert.equal((await crear(tokenHospital1, { id_tipo_sangre: 2, urgencia: 'baja' })).status, 400);
     assert.equal((await crear(tokenHospital1, { id_tipo_sangre: 99, urgencia: 'urgente' })).status, 400);
     assert.equal((await crear(tokenHospital1, { urgencia: 'urgente' })).status, 400);
     assert.equal((await crear(tokenHospital1, { id_tipo_sangre: 'x', urgencia: 'urgente' })).status, 400);

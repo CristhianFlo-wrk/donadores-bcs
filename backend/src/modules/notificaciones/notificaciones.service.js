@@ -1,9 +1,10 @@
 import { query, transaccion } from '../../config/database.js';
 import { errorValidacion, errorNoEncontrado, ErrorHttp } from '../../utils/errores.js';
 import { buscarCompatibles, DIAS_ENTRE_DONACIONES } from '../donantes/donantes.service.js';
-import { obtenerSolicitudBase, verificarAccesoHospital } from '../solicitudes/solicitudes.service.js';
+import { obtenerSolicitudBase, verificarAccesoHospital, caducarVencidas, nombrePaciente } from '../solicitudes/solicitudes.service.js';
+import { hashCURP } from '../../utils/crypto.js';
 import { registrarEntrada, registrarLog } from '../auditoria/auditoria.service.js';
-import { enviarPushSimulado, enviarSmsSimulado } from './proveedores/console.provider.js';
+import { enviarPushSimulado } from './proveedores/console.provider.js';
 import { enviarPushReal } from './proveedores/firebase.provider.js';
 
 const RESPUESTAS = ['confirmada', 'rechazada'];
@@ -23,13 +24,22 @@ export function regionDeBusqueda(solicitud, opciones = {}) {
   return solicitud.hospital_region;
 }
 
-// Notifica a los donantes compatibles y aptos. Urgente: region del hospital; critica: todo el estado
 export async function notificarSolicitud(usuario, idSolicitud, opciones = {}, contexto = {}) {
   const solicitud = await obtenerSolicitudBase(idSolicitud);
   verificarAccesoHospital(usuario, solicitud.id_hospital);
+  return enviarNotificaciones(solicitud, opciones, contexto);
+}
+
+// Notifica a los donantes compatibles y aptos. Normal y urgente: region del hospital; critica: todo el estado.
+// Recibe la solicitud de obtenerSolicitudBase; el acceso lo valida quien llama. Nunca avisa al autor
+export async function enviarNotificaciones(solicitud, opciones = {}, contexto = {}) {
+  const idSolicitud = solicitud.id;
 
   if (solicitud.estado !== 'activa') {
     throw errorValidacion('La solicitud no está activa');
+  }
+  if (solicitud.por_confirmar) {
+    throw errorValidacion('El hospital aún no confirma esta solicitud');
   }
 
   const region = regionDeBusqueda(solicitud, opciones);
@@ -38,6 +48,7 @@ export async function notificarSolicitud(usuario, idSolicitud, opciones = {}, co
     soloDisponibles: true,
     soloAptos: true,
     excluirSolicitud: idSolicitud,
+    excluirUsuario: solicitud.id_usuario_autor,
     limite: opciones.limite || 20
   });
 
@@ -75,8 +86,8 @@ export async function notificarSolicitud(usuario, idSolicitud, opciones = {}, co
     [nuevas.map((n) => n.id_donante)]
   );
 
-  // Solo datos minimos urgencia, tipo de sangre y hospital
-  const etiqueta = solicitud.urgencia === 'critica' ? 'CRITICA' : 'URGENTE';
+  // Solo datos minimos urgencia, tipo de sangre y hospital; nunca el nombre del paciente
+  const etiqueta = solicitud.urgencia.toUpperCase();
   const titulo = `[${etiqueta}] Se necesita sangre ${solicitud.tipo_sangre}`;
   const mensaje = `${titulo} en ${solicitud.hospital_nombre}. Confirma tu asistencia en la app.`;
 
@@ -85,14 +96,11 @@ export async function notificarSolicitud(usuario, idSolicitud, opciones = {}, co
     const donante = tokens.find((t) => t.id_donante === nueva.id_donante);
     const datos = { id_notificacion: String(nueva.id), id_solicitud: String(idSolicitud) };
     const envio = await enviarPush(donante, titulo, mensaje, datos);
-    // El SMS siempre es simulado; el destinatario se identifica por id para no imprimir el telefono en logs
-    const sms = await enviarSmsSimulado('donante_' + nueva.id_donante, mensaje);
     notificaciones.push({
       id: nueva.id,
       canal: 'push',
       estado: 'enviada',
-      modo: envio.modo,
-      sms: sms.modo
+      modo: envio.modo
     });
   }
 
@@ -113,15 +121,18 @@ export async function responderNotificacion(idUsuario, idNotificacion, respuesta
     throw errorValidacion('respuesta debe ser "confirmada" o "rechazada"');
   }
 
+  await caducarVencidas();
+
   return transaccion(async (client) => {
     // la solicitud no se puede cerrar ni la notificacion marcar como donada a mitad de la respuesta
     const { rows } = await client.query(`
-      SELECT n.id, n.estado, n.id_solicitud, s.estado AS solicitud_estado, d.id_usuario
+      SELECT n.id, n.estado, n.id_solicitud, n.id_donante, s.estado AS solicitud_estado, d.id_usuario, d.disponible,
+             (d.ultima_donacion IS NULL OR d.ultima_donacion <= NOW() - INTERVAL '${DIAS_ENTRE_DONACIONES} days') AS apto
       FROM notificaciones n
       JOIN donantes d ON n.id_donante = d.id
       JOIN solicitudes s ON n.id_solicitud = s.id
       WHERE n.id = $1
-      FOR UPDATE OF n, s
+      FOR UPDATE OF n, s, d
     `, [idNotificacion]);
 
     const notificacion = rows[0];
@@ -137,6 +148,25 @@ export async function responderNotificacion(idUsuario, idNotificacion, respuesta
     // Se permite cambiar de confirmada a rechazada y viceversa mientras no haya donado
     if (notificacion.estado === 'donada') {
       throw errorValidacion('La notificación ya está donada');
+    }
+
+    // Rechazar siempre se puede; confirmar exige lo mismo que ofrecerse y una sola asistencia a la vez,
+    // porque nadie puede donar en dos solicitudes dentro del periodo de espera
+    if (respuesta === 'confirmada' && notificacion.estado !== 'confirmada') {
+      if (!notificacion.disponible) {
+        throw errorValidacion('Activa tu disponibilidad para confirmar asistencia');
+      }
+      if (!notificacion.apto) {
+        throw new ErrorHttp(409, `Deben pasar ${DIAS_ENTRE_DONACIONES} días desde tu última donación`);
+      }
+      const otra = await client.query(`
+        SELECT 1 FROM notificaciones n
+        JOIN solicitudes s ON n.id_solicitud = s.id
+        WHERE n.id_donante = $1 AND n.id <> $2 AND n.estado = 'confirmada' AND s.estado = 'activa'
+      `, [notificacion.id_donante, idNotificacion]);
+      if (otra.rows.length > 0) {
+        throw new ErrorHttp(409, 'Ya confirmaste asistencia a otra solicitud. Si no vas a ir, márcala como "No puedo asistir" primero.');
+      }
     }
 
     await client.query(`
@@ -156,11 +186,81 @@ export async function responderNotificacion(idUsuario, idNotificacion, respuesta
   });
 }
 
+// El donante se ofrece por su cuenta a una solicitud activa que vio en el inicio, sin esperar a que el hospital lo notifique.
+// Queda como notificacion enviada para que confirme en Alertas igual que con una notificacion del hospital
+export async function ofrecerseSolicitud(idUsuario, idSolicitud, contexto = {}) {
+  await caducarVencidas();
+
+  return transaccion(async (client) => {
+    const { rows } = await client.query(`
+      SELECT d.id AS id_donante, d.disponible,
+             (d.ultima_donacion IS NULL OR d.ultima_donacion <= NOW() - INTERVAL '${DIAS_ENTRE_DONACIONES} days') AS apto,
+             s.estado AS solicitud_estado, s.id_usuario_autor, s.por_confirmar,
+             EXISTS (
+               SELECT 1 FROM compatibilidad_sanguinea cs
+               WHERE cs.id_donante = d.id_tipo_sangre AND cs.id_receptor = s.id_tipo_sangre
+             ) AS compatible
+      FROM donantes d
+      JOIN solicitudes s ON s.id = $2
+      WHERE d.id_usuario = $1
+      FOR UPDATE OF s
+    `, [idUsuario, idSolicitud]);
+
+    const fila = rows[0];
+    // Una ciudadana sin confirmar no se publica: para los demas donantes no existe todavia
+    if (!fila || (fila.por_confirmar && fila.id_usuario_autor !== idUsuario)) {
+      throw errorNoEncontrado('Solicitud no encontrada');
+    }
+    if (fila.solicitud_estado !== 'activa') {
+      throw errorValidacion('La solicitud ya no está activa');
+    }
+    if (fila.id_usuario_autor === idUsuario) {
+      throw errorValidacion('No puedes ofrecerte a tu propia solicitud');
+    }
+    if (!fila.compatible) {
+      throw errorValidacion('Tu tipo de sangre no es compatible con esta solicitud');
+    }
+    if (!fila.disponible) {
+      throw errorValidacion('Activa tu disponibilidad para ofrecerte a una solicitud');
+    }
+    if (!fila.apto) {
+      throw new ErrorHttp(409, `Deben pasar ${DIAS_ENTRE_DONACIONES} días desde tu última donación`);
+    }
+
+    // Si el hospital ya lo habia notificado se reutiliza esa notificacion
+    const insertada = await client.query(`
+      INSERT INTO notificaciones (id_solicitud, id_donante, canal, estado)
+      VALUES ($1, $2, 'push', 'enviada')
+      ON CONFLICT (id_solicitud, id_donante) DO NOTHING
+      RETURNING id, estado
+    `, [idSolicitud, fila.id_donante]);
+
+    if (insertada.rows.length === 0) {
+      const existente = await client.query(
+        'SELECT id, estado FROM notificaciones WHERE id_solicitud = $1 AND id_donante = $2',
+        [idSolicitud, fila.id_donante]
+      );
+      return { ...existente.rows[0], id_solicitud: idSolicitud, nueva: false };
+    }
+
+    await registrarLog(client, {
+      idUsuario,
+      accion: 'DONANTE_SE_OFRECE',
+      detalles: { id_notificacion: insertada.rows[0].id, id_solicitud: idSolicitud },
+      ipOrigen: contexto.ip
+    });
+
+    return { ...insertada.rows[0], id_solicitud: idSolicitud, nueva: true };
+  });
+}
+
 export async function listarNotificacionesDonante(idUsuario) {
+  await caducarVencidas();
+
   const { rows } = await query(`
     SELECT n.id, n.id_solicitud, n.canal, n.estado,
            n.fecha_envio, n.fecha_respuesta,
-           s.urgencia, s.estado AS solicitud_estado,
+           s.urgencia, s.estado AS solicitud_estado, s.paciente_nombre_cifrado,
            h.nombre AS hospital_nombre, h.direccion AS hospital_direccion,
            ts.codigo AS tipo_sangre
     FROM notificaciones n
@@ -171,11 +271,17 @@ export async function listarNotificacionesDonante(idUsuario) {
     WHERE d.id_usuario = $1
     ORDER BY n.fecha_envio DESC
   `, [idUsuario]);
-  return rows;
+  // Quien recibe la alerta nunca es el autor ni el hospital: solo ve las iniciales del paciente
+  return rows.map(({ paciente_nombre_cifrado: nombreCifrado, ...fila }) => ({
+    ...fila,
+    paciente_nombre: nombrePaciente(nombreCifrado, false)
+  }));
 }
 
 // Donantes que confirmaron asistencia en las solicitudes activas del hospital, sin datos del donante
 export async function listarConfirmadasHospital(idHospital) {
+  await caducarVencidas();
+
   const { rows } = await query(`
     SELECT n.id, n.id_solicitud, n.fecha_respuesta,
            s.urgencia, ts.codigo AS tipo_sangre
@@ -188,8 +294,9 @@ export async function listarConfirmadasHospital(idHospital) {
   return rows;
 }
 
-// El hospital marca que el donante asistio y dono: escribe en la cadena de historial_donaciones
-export async function registrarDonacion(usuario, idNotificacion, contexto = {}) {
+// El hospital marca que el donante asistio y dono: escribe en la cadena de historial_donaciones.
+// La CURP se lee de la identificacion de quien llego y se compara con la huella del donante que confirmo
+export async function registrarDonacion(usuario, idNotificacion, curp, contexto = {}) {
   return transaccion(async (client) => {
     // dos peticiones simultaneas no registran la misma donacion dos veces
     const { rows } = await client.query(`
@@ -219,8 +326,19 @@ export async function registrarDonacion(usuario, idNotificacion, contexto = {}) 
     if (notificacion.estado !== 'confirmada') {
       throw errorValidacion('Solo se registra la donación de un donante que confirmó asistencia');
     }
+    // Se permite en activa, completada y caducada
     if (notificacion.solicitud_estado === 'cancelada') {
       throw errorValidacion('La solicitud fue cancelada');
+    }
+    if (notificacion.solicitud_estado === 'falsa') {
+      throw errorValidacion('La solicitud fue marcada como falsa');
+    }
+
+    if (typeof curp !== 'string' || !curp.trim()) {
+      throw errorValidacion('Escribe la CURP de la identificación de quien vino a donar');
+    }
+    if (hashCURP(curp) !== notificacion.curp_hash) {
+      throw errorValidacion('La CURP no coincide con la del donante que confirmó este código');
     }
 
     const dias = notificacion.dias_desde_ultima;
@@ -258,7 +376,6 @@ export async function registrarDonacion(usuario, idNotificacion, contexto = {}) 
       historial: {
         id: entrada.id,
         fecha_donacion: entrada.fecha_donacion,
-        hash_anterior: entrada.hash_anterior,
         hash_actual: entrada.hash_actual
       }
     };

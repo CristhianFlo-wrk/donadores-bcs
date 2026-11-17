@@ -33,6 +33,9 @@ describe('GET /api/hospitales', () => {
   it('400 con region invalida', async () => {
     const res = await request(app).get('/api/hospitales?region=este').set(auth());
     assert.equal(res.status, 400);
+    // Nombres heredados de Object no cuentan como region
+    const heredada = await request(app).get('/api/hospitales?region=toString').set(auth());
+    assert.equal(heredada.status, 400);
   });
 
   it('obtiene un hospital por id', async () => {

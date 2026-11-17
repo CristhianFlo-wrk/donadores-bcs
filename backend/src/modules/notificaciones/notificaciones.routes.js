@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   postNotificar,
   patchResponder,
+  postOfrecerme,
   getMisNotificaciones,
   getConfirmadas,
   patchDonacion
@@ -19,6 +20,7 @@ router.patch('/:id/donacion', verificarToken, soloRol('hospital', 'admin'), patc
 
 // Donante
 router.get('/mis-notificaciones', verificarToken, soloRol('donante'), getMisNotificaciones);
+router.post('/ofrecerme', verificarToken, soloRol('donante'), postOfrecerme);
 router.patch('/:id/responder', verificarToken, soloRol('donante'), patchResponder);
 
 export default router;

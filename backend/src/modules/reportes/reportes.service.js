@@ -1,5 +1,6 @@
 import { query } from '../../config/database.js';
 import { DIAS_ENTRE_DONACIONES } from '../donantes/donantes.service.js';
+import { caducarVencidas } from '../solicitudes/solicitudes.service.js';
 
 // Agrega condicion de hospital si se indica; los datos de donantes son agregados de todo el estado
 function filtroHospital(columna, idHospital, valores) {
@@ -59,9 +60,12 @@ async function resumenSolicitudes(idHospital) {
   const { rows } = await query(`
     SELECT COUNT(*) AS total,
            COUNT(*) FILTER (WHERE estado = 'activa') AS activas,
-           COUNT(*) FILTER (WHERE estado = 'activa' AND urgencia = 'critica') AS criticas_activas,
+           COUNT(*) FILTER (WHERE estado = 'activa' AND urgencia = 'critica' AND NOT por_confirmar) AS criticas_activas,
            COUNT(*) FILTER (WHERE estado = 'completada') AS completadas,
-           COUNT(*) FILTER (WHERE estado = 'cancelada') AS canceladas
+           COUNT(*) FILTER (WHERE estado = 'cancelada') AS canceladas,
+           COUNT(*) FILTER (WHERE estado = 'falsa') AS falsas,
+           COUNT(*) FILTER (WHERE estado = 'caducada') AS caducadas,
+           COUNT(*) FILTER (WHERE estado = 'activa' AND por_confirmar) AS por_confirmar
     FROM solicitudes
     WHERE TRUE ${filtroHospital('id_hospital', idHospital, valores)}
   `, valores);
@@ -99,8 +103,9 @@ async function totalDonaciones(idHospital) {
   return rows[0].total;
 }
 
-// idHospital null = todo el sistema (admin)
 export async function obtenerDashboard({ idHospital = null, limite = 10 } = {}) {
+  await caducarVencidas();
+
   const [donantes, porGrupo, porRegion, solicitudes, atendidas, donaciones] = await Promise.all([
     resumenDonantes(),
     donantesPorGrupo(),

@@ -5,7 +5,10 @@ import jwt from 'jsonwebtoken';
 import { app } from '../src/index.js';
 import { cerrarPool, query } from '../src/config/database.js';
 import { descifrar, hashCURP } from '../src/utils/crypto.js';
+import { readFile } from 'node:fs/promises';
 import { prepararBaseDatos, idColonia, crearUsuarioHospital, contarFilas } from './helpers.js';
+import { VERSION_AVISO_PRIVACIDAD } from '../src/modules/auth/auth.service.js';
+import { DIAS_CONSERVACION_IP } from '../src/modules/auditoria/auditoria.service.js';
 
 let coloniaCentroLaPaz;
 let coloniaOtraLoreto;
@@ -22,6 +25,7 @@ function donante(cambios = {}) {
     id_tipo_sangre: 1,
     id_colonia: coloniaCentroLaPaz,
     peso_kg: 70,
+    acepta_privacidad: true,
     ...cambios
   };
 }
@@ -53,6 +57,31 @@ describe('POST /api/auth/registro', () => {
     assert.equal(fila.curp_hash, hashCURP('PELJ950520HBSRPN01'));
     assert.equal(fila.region, 'sur');
     assert.equal(fila.disponible, true);
+  });
+
+  it('exige el consentimiento expreso del aviso de privacidad y guarda cuando y que version se acepto', async () => {
+    for (const acepta of [undefined, false, 'true']) {
+      const res = await registrar(donante({ email: 'sin.aviso@example.com', curp: 'SINA950520HBSRPN01', acepta_privacidad: acepta }));
+      assert.equal(res.status, 400, String(acepta));
+      assert.match(res.body.error, /aviso de privacidad/);
+    }
+    assert.equal((await query("SELECT 1 FROM usuarios WHERE email = 'sin.aviso@example.com'")).rows.length, 0);
+
+    const { rows } = await query(`
+      SELECT d.fecha_consentimiento, l.detalles->>'aviso_privacidad' AS version
+      FROM donantes d
+      JOIN usuarios u ON d.id_usuario = u.id
+      JOIN auditoria_logs l ON l.id_usuario = u.id AND l.accion = 'REGISTRO_DONANTE'
+      WHERE u.email = 'juan.perez@example.com'
+    `);
+    assert.ok(rows[0].fecha_consentimiento instanceof Date);
+    assert.match(rows[0].version, /^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('la version del aviso y el plazo de la IP coinciden con lo que muestra la pagina de privacidad', async () => {
+    const pagina = await readFile(new URL('../../frontend/src/paginas/publico/Privacidad.jsx', import.meta.url), 'utf8');
+    assert.ok(pagina.includes(`export const VERSION_AVISO = '${VERSION_AVISO_PRIVACIDAD}';`), 'VERSION_AVISO distinta en Privacidad.jsx');
+    assert.ok(pagina.includes(`export const DIAS_CONSERVACION_IP = ${DIAS_CONSERVACION_IP};`), 'DIAS_CONSERVACION_IP distinto en Privacidad.jsx');
   });
 
   it('rechaza email duplicado (sin importar mayusculas)', async () => {
@@ -151,6 +180,19 @@ describe('POST /api/auth/login y GET /api/auth/perfil', () => {
     assert.equal(a.status, 401);
     assert.equal(b.status, 401);
     assert.equal(a.body.error, b.body.error);
+  });
+
+  it('el login fallido solo se registra contra cuentas reales y sin lo escrito en el campo email', async () => {
+    const contar = async () => (await query("SELECT COUNT(*)::int AS total FROM auditoria_logs WHERE accion = 'LOGIN_FALLIDO'")).rows[0].total;
+    const antes = await contar();
+    await request(app).post('/api/auth/login').send({ email: 'MiPassword123', password: 'x' });
+    assert.equal(await contar(), antes);
+
+    await request(app).post('/api/auth/login').send({ email: 'juan.perez@example.com', password: 'MiPassword123x' });
+    assert.equal(await contar(), antes + 1);
+    const { rows } = await query("SELECT id_usuario, detalles FROM auditoria_logs WHERE accion = 'LOGIN_FALLIDO' ORDER BY id DESC LIMIT 1");
+    assert.ok(rows[0].id_usuario);
+    assert.equal(rows[0].detalles, null);
   });
 
   it('400 si faltan credenciales', async () => {

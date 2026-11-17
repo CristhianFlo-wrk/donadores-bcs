@@ -7,6 +7,9 @@ import { pathToFileURL } from 'url';
 import { probarConexion, cerrarPool } from './config/database.js';
 import { validarEntorno } from './config/entorno.js';
 import { ErrorHttp, esDatoInvalidoPg } from './utils/errores.js';
+import { limitarGeneral } from './middleware/limiteIntentos.js';
+import { obtenerEstado, purgarIpsVencidas } from './modules/auditoria/auditoria.service.js';
+import { purgarPublicacionVencida } from './modules/solicitudes/solicitudes.service.js';
 import ubicacionesRoutes from './modules/ubicaciones/ubicaciones.routes.js';
 import hospitalesRoutes from './modules/hospitales/hospitales.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
@@ -30,6 +33,8 @@ function opcionesCors() {
 app.use(helmet());
 app.use(cors(opcionesCors()));
 if (process.env.NODE_ENV !== 'test') app.use(morgan('[SERVER] :method :url :status :response-time ms'));
+// La solicitud ciudadana puede traer hasta 3 fotos (600 KB cada una, un tercio mas en base64); el resto, el limite normal de 100 KB
+app.use('/api/solicitudes/ciudadana', express.json({ limit: '3mb' }));
 app.use(express.json());
 
 app.get('/api/health', (req, res) => {
@@ -39,6 +44,9 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Despues de /api/health para que el ping no cuente
+app.use('/api', limitarGeneral);
 
 app.use('/api/ubicaciones', ubicacionesRoutes);
 app.use('/api/hospitales', hospitalesRoutes);
@@ -81,9 +89,34 @@ async function iniciar() {
     process.exit(1);
   }
 
-  const servidor = app.listen(PORT, () => {
+  const servidor = app.listen(PORT, (error) => {
+    if (error) {
+      console.error('[ERROR] [SERVER] No se pudo abrir el puerto ' + PORT + ': ' + error.message);
+      process.exit(1);
+    }
     console.log('[SERVER] Servidor corriendo en puerto ' + PORT);
   });
+
+  
+  const mantenimiento = async () => {
+    try {
+      await purgarPublicacionVencida();
+    } catch (error) {
+      console.error('[ERROR] [SOLICITUDES] Fallo el borrado de fotos y mensajes vencidos: ' + error.message);
+    }
+    try {
+      await purgarIpsVencidas();
+      const estado = await obtenerEstado({ completa: true });
+      for (const [nombre, verificacion] of [['donaciones', estado.verificacion_donaciones], ['bitacora', estado.verificacion_logs]]) {
+        if (verificacion.integra) console.log('[AUDITORIA] Verificacion completa de ' + nombre + ': ' + verificacion.total + ' registros integros');
+        else console.error('[ERROR] [AUDITORIA] Cadena de ' + nombre + ' alterada en el registro ' + verificacion.id_roto + ': ' + verificacion.mensaje);
+      }
+    } catch (error) {
+      console.error('[ERROR] [AUDITORIA] Fallo el mantenimiento diario: ' + error.message);
+    }
+  };
+  mantenimiento();
+  setInterval(mantenimiento, 24 * 60 * 60 * 1000).unref();
 
   // Render manda SIGTERM al redesplegar: se terminan las peticiones en curso y se cierra el pool
   const apagar = (senal) => {

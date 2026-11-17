@@ -46,14 +46,14 @@ describe('POST /api/notificaciones/notificar', () => {
     assert.equal((await request(app).post('/api/notificaciones/notificar').set(bearer(donanteSur.token)).send({ id_solicitud: idSolicitud })).status, 403);
   });
 
-  it('urgente: notifica por defecto solo a compatibles de la region del hospital, por push y SMS', async () => {
+  it('urgente: notifica por defecto solo a compatibles de la region del hospital, por push', async () => {
     const res = await request(app).post('/api/notificaciones/notificar').set(bearer(tokenHospital1)).send({ id_solicitud: idSolicitud });
     assert.equal(res.status, 200);
     assert.equal(res.body.alcance, 'sur');
     const ids = (await donantesAvisados(res)).sort();
     assert.deepEqual(ids, [donanteSur.id_donante, donanteSur2.id_donante].sort());
     assert.ok(res.body.notificaciones.every((n) => n.id_donante === undefined));
-    assert.ok(res.body.notificaciones.every((n) => n.modo === 'simulado' && n.sms === 'simulado'));
+    assert.ok(res.body.notificaciones.every((n) => n.modo === 'simulado' && n.sms === undefined));
   });
 
   it('no duplica notificaciones y puede ampliar a todas las regiones', async () => {
@@ -121,6 +121,30 @@ describe('donante: mis-notificaciones y responder', () => {
     assert.equal(rows[0].id_usuario, donanteSur.id_usuario);
   });
 
+  it('una sola asistencia confirmada a la vez y solo estando disponible', async () => {
+    const otra = await request(app).post('/api/solicitudes').set(bearer(tokenHospital1)).send({ id_tipo_sangre: 2, urgencia: 'urgente' });
+    await request(app).post('/api/notificaciones/notificar').set(bearer(tokenHospital1)).send({ id_solicitud: otra.body.solicitud.id });
+    const { rows } = await query('SELECT id FROM notificaciones WHERE id_solicitud = $1 AND id_donante = $2', [otra.body.solicitud.id, donanteSur.id_donante]);
+
+    // donanteSur ya confirmo la primera solicitud
+    const doble = await request(app).patch(`/api/notificaciones/${rows[0].id}/responder`).set(bearer(donanteSur.token)).send({ respuesta: 'confirmada' });
+    assert.equal(doble.status, 409);
+    assert.match(doble.body.error, /otra solicitud/);
+    // Rechazar si se puede
+    const rechaza = await request(app).patch(`/api/notificaciones/${rows[0].id}/responder`).set(bearer(donanteSur.token)).send({ respuesta: 'rechazada' });
+    assert.equal(rechaza.status, 200);
+
+    // Con la disponibilidad apagada no confirma; su notificacion sigue rechazada
+    const rechazada = await notificacionDe(donanteSur2.id_donante);
+    await request(app).patch('/api/donantes/disponibilidad').set(bearer(donanteSur2.token)).send({ disponible: false });
+    const sinDisponibilidad = await request(app).patch(`/api/notificaciones/${rechazada.id}/responder`).set(bearer(donanteSur2.token)).send({ respuesta: 'confirmada' });
+    assert.equal(sinDisponibilidad.status, 400);
+    assert.equal((await notificacionDe(donanteSur2.id_donante)).estado, 'rechazada');
+    await request(app).patch('/api/donantes/disponibilidad').set(bearer(donanteSur2.token)).send({ disponible: true });
+
+    await request(app).patch(`/api/solicitudes/${otra.body.solicitud.id}/cerrar`).set(bearer(tokenHospital1)).send({ estado: 'cancelada' });
+  });
+
   it('el hospital ve las confirmaciones de sus solicitudes activas sin datos del donante', async () => {
     const confirmada = await notificacionDe(donanteSur.id_donante);
     const res = await request(app).get('/api/notificaciones/confirmadas').set(bearer(tokenHospital1));
@@ -146,25 +170,37 @@ describe('donante: mis-notificaciones y responder', () => {
 describe('PATCH /api/notificaciones/:id/donacion', () => {
   it('no registra donacion de quien no confirmo', async () => {
     const rechazada = await notificacionDe(donanteSur2.id_donante);
-    const res = await request(app).patch(`/api/notificaciones/${rechazada.id}/donacion`).set(bearer(tokenHospital1));
+    const res = await request(app).patch(`/api/notificaciones/${rechazada.id}/donacion`).set(bearer(tokenHospital1)).send({ curp: donanteSur2.curp });
     assert.equal(res.status, 400);
   });
 
   it('otro hospital no puede registrarla', async () => {
     const confirmada = await notificacionDe(donanteSur.id_donante);
-    assert.equal((await request(app).patch(`/api/notificaciones/${confirmada.id}/donacion`).set(bearer(tokenHospital2))).status, 403);
+    assert.equal((await request(app).patch(`/api/notificaciones/${confirmada.id}/donacion`).set(bearer(tokenHospital2)).send({ curp: donanteSur.curp })).status, 403);
+  });
+
+  it('pide la CURP de la identificacion y no registra si no coincide con la del donante', async () => {
+    const confirmada = await notificacionDe(donanteSur.id_donante);
+    const sinCurp = await request(app).patch(`/api/notificaciones/${confirmada.id}/donacion`).set(bearer(tokenHospital1));
+    assert.equal(sinCurp.status, 400);
+    const ajena = await request(app).patch(`/api/notificaciones/${confirmada.id}/donacion`).set(bearer(tokenHospital1)).send({ curp: donanteSur2.curp });
+    assert.equal(ajena.status, 400);
+    assert.match(ajena.body.error, /no coincide/);
+    assert.equal((await notificacionDe(donanteSur.id_donante)).estado, 'confirmada');
+    const { rows } = await query('SELECT COUNT(*) AS total FROM historial_donaciones');
+    assert.equal(rows[0].total, 0);
   });
 
   it('flujo completo: registra en la cadena, actualiza al donante y no se duplica', async () => {
     const confirmada = await notificacionDe(donanteSur.id_donante);
     const [a, b] = await Promise.all([
-      request(app).patch(`/api/notificaciones/${confirmada.id}/donacion`).set(bearer(tokenHospital1)),
-      request(app).patch(`/api/notificaciones/${confirmada.id}/donacion`).set(bearer(tokenHospital1))
+      request(app).patch(`/api/notificaciones/${confirmada.id}/donacion`).set(bearer(tokenHospital1)).send({ curp: donanteSur.curp }),
+      request(app).patch(`/api/notificaciones/${confirmada.id}/donacion`).set(bearer(tokenHospital1)).send({ curp: donanteSur.curp })
     ]);
     assert.deepEqual([a.status, b.status].sort(), [200, 400]);
     const ok = a.status === 200 ? a : b;
     assert.equal(ok.body.donacion.estado, 'donada');
-    assert.equal(ok.body.donacion.historial.hash_anterior, '0'.repeat(64));
+    assert.match(ok.body.donacion.historial.hash_actual, /^[0-9a-f]{64}$/);
 
     const historial = await request(app).get('/api/auditoria/mi-historial').set(bearer(donanteSur.token));
     assert.equal(historial.body.total, 1);
@@ -197,8 +233,20 @@ describe('PATCH /api/notificaciones/:id/donacion', () => {
       "INSERT INTO notificaciones (id_solicitud, id_donante, canal, estado) VALUES ($1, $2, 'push', 'confirmada') RETURNING id",
       [idNueva, donanteSur.id_donante]
     );
-    const res = await request(app).patch(`/api/notificaciones/${rows[0].id}/donacion`).set(bearer(tokenHospital1));
+    const res = await request(app).patch(`/api/notificaciones/${rows[0].id}/donacion`).set(bearer(tokenHospital1)).send({ curp: donanteSur.curp });
     assert.equal(res.status, 409);
+  });
+
+  it('quien acaba de donar no puede confirmar otra asistencia', async () => {
+    const nueva = await request(app).post('/api/solicitudes').set(bearer(tokenHospital1)).send({ id_tipo_sangre: 1, urgencia: 'urgente' });
+    const { rows } = await query(
+      "INSERT INTO notificaciones (id_solicitud, id_donante, canal, estado) VALUES ($1, $2, 'push', 'enviada') RETURNING id",
+      [nueva.body.solicitud.id, donanteSur.id_donante]
+    );
+    const res = await request(app).patch(`/api/notificaciones/${rows[0].id}/responder`).set(bearer(donanteSur.token)).send({ respuesta: 'confirmada' });
+    assert.equal(res.status, 409);
+    assert.match(res.body.error, /90 días/);
+    await request(app).patch(`/api/solicitudes/${nueva.body.solicitud.id}/cerrar`).set(bearer(tokenHospital1)).send({ estado: 'cancelada' });
   });
 
   it('se puede registrar la donacion despues de cerrar la solicitud como completada', async () => {
@@ -207,7 +255,7 @@ describe('PATCH /api/notificaciones/:id/donacion', () => {
     const cierre = await request(app).patch(`/api/solicitudes/${idSolicitud}/cerrar`).set(bearer(tokenHospital1)).send({ estado: 'completada' });
     assert.equal(cierre.status, 200);
 
-    const res = await request(app).patch(`/api/notificaciones/${pendiente.id}/donacion`).set(bearer(tokenHospital1));
+    const res = await request(app).patch(`/api/notificaciones/${pendiente.id}/donacion`).set(bearer(tokenHospital1)).send({ curp: donanteCentro.curp });
     assert.equal(res.status, 200);
     assert.equal(res.body.donacion.estado, 'donada');
   });
@@ -220,7 +268,7 @@ describe('PATCH /api/notificaciones/:id/donacion', () => {
       [idNueva, donanteSur2.id_donante]
     );
     await request(app).patch(`/api/solicitudes/${idNueva}/cerrar`).set(bearer(tokenHospital1)).send({ estado: 'cancelada' });
-    const res = await request(app).patch(`/api/notificaciones/${rows[0].id}/donacion`).set(bearer(tokenHospital1));
+    const res = await request(app).patch(`/api/notificaciones/${rows[0].id}/donacion`).set(bearer(tokenHospital1)).send({ curp: donanteSur2.curp });
     assert.equal(res.status, 400);
   });
 
@@ -267,5 +315,50 @@ describe('volver a notificar', () => {
       enviadas.push(res.body.notificaciones_enviadas);
     }
     assert.deepEqual(enviadas, [1, 1, 1, 0]);
+  });
+});
+
+describe('POST /api/notificaciones/ofrecerme', () => {
+  it('el donante compatible, disponible y apto se ofrece y queda una notificacion por confirmar', async () => {
+    const nueva = await request(app).post('/api/solicitudes').set(bearer(tokenHospital2)).send({ id_tipo_sangre: 2, urgencia: 'urgente' });
+    const idNueva = nueva.body.solicitud.id;
+    const donante = await crearDonante(app, request, { id_tipo_sangre: 1 });
+
+    const res = await request(app).post('/api/notificaciones/ofrecerme').set(bearer(donante.token)).send({ id_solicitud: idNueva });
+    assert.equal(res.status, 201);
+    assert.equal(res.body.notificacion.estado, 'enviada');
+
+    // Repetir devuelve la misma notificacion sin duplicar
+    const otraVez = await request(app).post('/api/notificaciones/ofrecerme').set(bearer(donante.token)).send({ id_solicitud: idNueva });
+    assert.equal(otraVez.status, 200);
+    assert.equal(otraVez.body.notificacion.id, res.body.notificacion.id);
+
+    const { rows } = await query("SELECT COUNT(*)::int AS total FROM auditoria_logs WHERE accion = 'DONANTE_SE_OFRECE'");
+    assert.equal(rows[0].total, 1);
+  });
+
+  it('rechaza incompatibles, no disponibles, no aptos, solicitudes cerradas y otros roles', async () => {
+    const nueva = await request(app).post('/api/solicitudes').set(bearer(tokenHospital2)).send({ id_tipo_sangre: 1, urgencia: 'critica' });
+    const idNueva = nueva.body.solicitud.id;
+    const ofrecer = (token, id = idNueva) => request(app).post('/api/notificaciones/ofrecerme').set(bearer(token)).send({ id_solicitud: id });
+
+    // O+ no puede donar a O-
+    const incompatible = await crearDonante(app, request, { id_tipo_sangre: 2 });
+    assert.equal((await ofrecer(incompatible.token)).status, 400);
+
+    const enPausa = await crearDonante(app, request, { id_tipo_sangre: 1 });
+    await request(app).patch('/api/donantes/disponibilidad').set(bearer(enPausa.token)).send({ disponible: false });
+    assert.equal((await ofrecer(enPausa.token)).status, 400);
+
+    const reciente = await crearDonante(app, request, { id_tipo_sangre: 1 });
+    await query("UPDATE donantes SET ultima_donacion = NOW() - INTERVAL '10 days' WHERE id = $1", [reciente.id_donante]);
+    assert.equal((await ofrecer(reciente.token)).status, 409);
+
+    assert.equal((await ofrecer(tokenHospital1)).status, 403);
+    assert.equal((await ofrecer(enPausa.token, 99999)).status, 404);
+
+    await request(app).patch(`/api/solicitudes/${idNueva}/cerrar`).set(bearer(tokenHospital2)).send({ estado: 'cancelada' });
+    const apto = await crearDonante(app, request, { id_tipo_sangre: 1 });
+    assert.equal((await ofrecer(apto.token)).status, 400);
   });
 });

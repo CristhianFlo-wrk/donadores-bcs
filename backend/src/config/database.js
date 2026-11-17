@@ -11,7 +11,7 @@ types.setTypeParser(types.builtins.DATE, (valor) => valor);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: process.env.NODE_ENV === 'production'
 });
 
 pool.on('error', (error) => {

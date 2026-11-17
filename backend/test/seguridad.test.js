@@ -5,7 +5,9 @@ import { app } from '../src/index.js';
 import { cerrarPool } from '../src/config/database.js';
 import { validarEntorno } from '../src/config/entorno.js';
 import { reiniciarIntentos } from '../src/middleware/limiteIntentos.js';
-import { prepararBaseDatos } from './helpers.js';
+import { prepararBaseDatos, crearDonante } from './helpers.js';
+
+const bearer = (token) => ({ Authorization: 'Bearer ' + token });
 
 before(prepararBaseDatos);
 after(cerrarPool);
@@ -61,5 +63,72 @@ describe('limite de logins fallidos', () => {
       assert.equal(res.status, 200);
     }
     delete process.env.LOGIN_MAX_INTENTOS;
+  });
+});
+
+describe('limites de registro, solicitudes ciudadanas y general', () => {
+  it('limite de registro: 429 al pasar N registros exitosos por IP; los fallidos no cuentan', async () => {
+    const previo = process.env.LIMITE_REGISTRO_POR_HORA;
+    reiniciarIntentos();
+    process.env.LIMITE_REGISTRO_POR_HORA = '2';
+    try {
+      await crearDonante(app, request);
+      const fallido = await request(app).post('/api/auth/registro').send({ email: 'incompleto@test.com' });
+      assert.equal(fallido.status, 400);
+      await crearDonante(app, request);
+
+      const bloqueado = await request(app).post('/api/auth/registro').send({ email: 'otro@test.com' });
+      assert.equal(bloqueado.status, 429);
+      assert.ok(Number(bloqueado.headers['retry-after']) > 0);
+    } finally {
+      process.env.LIMITE_REGISTRO_POR_HORA = previo;
+      reiniciarIntentos();
+    }
+  });
+
+  it('limite de solicitudes ciudadanas: 429 al pasar N creaciones por IP', async () => {
+    const donante = await crearDonante(app, request);
+    const pedir = () => request(app).post('/api/solicitudes/ciudadana').set(bearer(donante.token)).send({
+      consentimiento: true, para_si_mismo: false, paciente_nombre: 'Paciente Limite', id_hospital: 1, id_tipo_sangre: 1, urgencia: 'normal'
+    });
+    const cancelar = (id) => request(app).patch(`/api/solicitudes/${id}/cerrar`).set(bearer(donante.token)).send({ estado: 'cancelada' });
+
+    const previo = process.env.LIMITE_SOLICITUDES_POR_HORA;
+    reiniciarIntentos();
+    process.env.LIMITE_SOLICITUDES_POR_HORA = '2';
+    try {
+      for (let i = 0; i < 2; i++) {
+        const res = await pedir();
+        assert.equal(res.status, 201);
+        assert.equal((await cancelar(res.body.solicitud.id)).status, 200);
+      }
+      const bloqueado = await pedir();
+      assert.equal(bloqueado.status, 429);
+      assert.ok(Number(bloqueado.headers['retry-after']) > 0);
+    } finally {
+      process.env.LIMITE_SOLICITUDES_POR_HORA = previo;
+      reiniciarIntentos();
+    }
+  });
+
+  it('limite general: 429 al pasar N peticiones por minuto; /api/health no cuenta', async () => {
+    const previo = process.env.LIMITE_GENERAL_POR_MINUTO;
+    reiniciarIntentos();
+    process.env.LIMITE_GENERAL_POR_MINUTO = '3';
+    try {
+      for (let i = 0; i < 5; i++) {
+        assert.equal((await request(app).get('/api/health')).status, 200);
+      }
+      for (let i = 0; i < 3; i++) {
+        assert.equal((await request(app).get('/api/ubicaciones/tipos-sangre')).status, 200);
+      }
+      const bloqueado = await request(app).get('/api/ubicaciones/tipos-sangre');
+      assert.equal(bloqueado.status, 429);
+      assert.match(bloqueado.body.error, /Demasiadas peticiones/);
+      assert.equal((await request(app).get('/api/health')).status, 200);
+    } finally {
+      process.env.LIMITE_GENERAL_POR_MINUTO = previo;
+      reiniciarIntentos();
+    }
   });
 });

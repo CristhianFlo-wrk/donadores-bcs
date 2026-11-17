@@ -65,36 +65,36 @@ INSERT INTO colonias (id_municipio, nombre, codigo_postal, latitud, longitud) VA
 (5, 'Otra',                     NULL,    NULL,    NULL)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO hospitales (id, nombre, institucion, region, direccion, latitud, longitud) VALUES
-(1, 'IMSS HGZ No. 1 La Paz', 'IMSS', 'sur',
+INSERT INTO hospitales (id, nombre, institucion, id_municipio, region, direccion, latitud, longitud) VALUES
+(1, 'IMSS HGZ No. 1 La Paz', 'IMSS', 4, 'sur',
  'Blvd. 5 de Febrero 725, Col. Pueblo Nuevo, La Paz, BCS',
  24.1481, -110.3168),
 
-(2, 'ISSSTE Dra. Columba Rivera', 'ISSSTE', 'sur',
+(2, 'ISSSTE Dra. Columba Rivera', 'ISSSTE', 4, 'sur',
  'Av. De los Deportistas, La Paz, BCS',
  24.1332, -110.3308),
 
-(3, 'Hospital General Salvatierra', 'SSBCS', 'sur',
+(3, 'Hospital General Salvatierra', 'SSBCS', 4, 'sur',
  'Av. de los Deportistas 86, Col. 3 de Mayo, La Paz, BCS',
  24.1129, -110.3182),
 
-(4, 'IMSS HGMF No. 6 Cd. Constitucion', 'IMSS', 'centro',
+(4, 'IMSS HGMF No. 6 Cd. Constitucion', 'IMSS', 3, 'centro',
  'Blvd. Olachea, Cd. Constitucion, BCS',
  25.0340, -111.6460),
 
-(5, 'Hospital General Cd. Constitucion', 'SSBCS', 'centro',
+(5, 'Hospital General Cd. Constitucion', 'SSBCS', 3, 'centro',
  'Blvd. Hugo Cervantes del Rio S/N, Fracc. San Martin, Cd. Constitucion, BCS',
  25.0313, -111.6746),
 
-(6, 'IMSS HGMF No. 26 Cabo San Lucas', 'IMSS', 'sur',
+(6, 'IMSS HGMF No. 26 Cabo San Lucas', 'IMSS', 5, 'sur',
  'Carretera Transpeninsular Km 2.5, Col. Brisas del Pacifico, Cabo San Lucas, BCS',
  22.8995, -109.9279),
 
-(7, 'ISSSTE San Jose del Cabo', 'ISSSTE', 'sur',
+(7, 'ISSSTE San Jose del Cabo', 'ISSSTE', 5, 'sur',
  'Calle Tifon, Col. Rosarito, San Jose del Cabo, BCS',
  23.0687, -109.7087),
 
-(8, 'Hospital General San Jose', 'SSBCS', 'sur',
+(8, 'Hospital General San Jose', 'SSBCS', 5, 'sur',
  'Col. Guaymitas, San Jose del Cabo, BCS',
  23.0618, -109.7076)
 ON CONFLICT DO NOTHING;
